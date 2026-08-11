@@ -5,8 +5,8 @@ import {
 } from 'recharts';
 import { TrendingUp, TrendingDown, Minus, Filter, ArrowUpDown, Download, Search } from 'lucide-react';
 import { ChartCard } from '../components/ui/ChartCard';
+import { DataTable } from '../components/ui/DataTable';
 import { mockRequestedItems, mockCategoryBreakdown } from '../data/mockData';
-import type { RequestedItem } from '../types';
 import { exportToCSV } from '../utils/csvExport';
 
 const trendIcons = {
@@ -75,19 +75,26 @@ export const MostRequestedPage: React.FC = () => {
     ]);
   };
 
-  const Sparkline: React.FC<{ data: number[]; trend: string }> = ({ data, trend }) => {
+  const Sparkline: React.FC<{ data: number[]; trend: string; name: string }> = ({ data, trend, name }) => {
     const max = Math.max(...data);
     const min = Math.min(...data);
     const range = max - min || 1;
-    const color = trend === 'rising' ? '#10b981' : trend === 'declining' ? '#ef4444' : '#64748b';
-    const points = data.map((v, i) => {
-      const x = (i / (data.length - 1)) * 60;
-      const y = 20 - ((v - min) / range) * 16;
-      return `${x},${y}`;
-    }).join(' ');
+    const color = trend === 'rising' ? '#34d399' : trend === 'declining' ? '#f87171' : '#94a3b8';
+    const points = data
+      .map((v, i) => {
+        const x = (i / (data.length - 1)) * 60;
+        const y = 20 - ((v - min) / range) * 16;
+        return `${x},${y}`;
+      })
+      .join(' ');
 
     return (
-      <svg width="60" height="24" className="opacity-80">
+      <svg
+        width="60"
+        height="24"
+        role="img"
+        aria-label={`${name}: seven day requests from ${data[0]} to ${data[data.length - 1]}, ${trend}`}
+      >
         <polyline
           fill="none"
           stroke={color}
@@ -145,6 +152,10 @@ export const MostRequestedPage: React.FC = () => {
           title="Top 15 Most Requested"
           subtitle={categoryFilter === 'all' ? 'All categories' : categoryFilter}
           className="lg:col-span-2"
+          dataTable={{
+            columns: ['Item', 'Category', 'Requests'],
+            rows: top15.map((item) => [item.name, item.category, item.requestCount]),
+          }}
         >
           <div className="h-[480px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -188,6 +199,10 @@ export const MostRequestedPage: React.FC = () => {
         <ChartCard
           title="By Category"
           subtitle="Distribution of total items"
+          dataTable={{
+            columns: ['Category', 'Items'],
+            rows: mockCategoryBreakdown.map((entry) => [entry.category, entry.value]),
+          }}
         >
           <div className="h-[220px] flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
@@ -236,13 +251,13 @@ export const MostRequestedPage: React.FC = () => {
         action={
           <div className="flex items-center gap-2">
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
               <input
                 type="text"
                 value={searchItem}
                 onChange={(e) => setSearchItem(e.target.value)}
                 placeholder="Search Item..."
-                className="pl-8 pr-3 py-1 text-[12px] bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
+                className="pl-8 pr-3 py-1 text-[12px] bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
               />
             </div>
             <button
@@ -255,63 +270,87 @@ export const MostRequestedPage: React.FC = () => {
           </div>
         }
       >
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-white/[0.06]">
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-left">#</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-left">Item</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-left">Category</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">Requests</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-center">7-Day</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">Trend</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">Last Req.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map((item: RequestedItem, idx: number) => {
+        <DataTable
+          caption="Every requested item with its request count and seven-day trend"
+          data={filteredItems}
+          rowKey={(item) => item.id}
+          initialSortKey="requestCount"
+          emptyMessage={
+            searchItem ? `No items match “${searchItem}”.` : 'No items in this category.'
+          }
+          columns={[
+            {
+              key: 'name',
+              label: 'Item',
+              sortable: true,
+              render: (item) => <span className="font-medium text-white">{item.name}</span>,
+            },
+            {
+              key: 'category',
+              label: 'Category',
+              sortable: true,
+              render: (item) => (
+                <span
+                  className="text-[11px] font-medium px-2 py-0.5 rounded-full border whitespace-nowrap"
+                  style={{
+                    color: categoryColors[item.category] || '#cbd5e1',
+                    backgroundColor: `${categoryColors[item.category] || '#cbd5e1'}22`,
+                    borderColor: `${categoryColors[item.category] || '#cbd5e1'}55`,
+                  }}
+                >
+                  {item.category}
+                </span>
+              ),
+            },
+            {
+              key: 'requestCount',
+              label: 'Requests',
+              align: 'right',
+              sortable: true,
+              render: (item) => (
+                <span className="font-semibold text-white">{item.requestCount.toLocaleString()}</span>
+              ),
+            },
+            {
+              key: 'weeklyData',
+              label: '7-Day',
+              srLabel: ' request history',
+              align: 'center',
+              render: (item) => (
+                <span className="flex justify-center">
+                  <Sparkline data={item.weeklyData} trend={item.trend} name={item.name} />
+                </span>
+              ),
+            },
+            {
+              key: 'trendPercentage',
+              label: 'Trend',
+              align: 'right',
+              sortable: true,
+              render: (item) => {
                 const TrendIcon = trendIcons[item.trend];
                 return (
-                  <tr key={item.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3 px-3 text-[12px] text-slate-500">{idx + 1}</td>
-                    <td className="py-3 px-3">
-                      <p className="text-[13px] font-medium text-white">{item.name}</p>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span
-                        className="text-[11px] font-medium px-2 py-0.5 rounded-full border"
-                        style={{
-                          color: categoryColors[item.category] || '#94a3b8',
-                          backgroundColor: `${categoryColors[item.category] || '#94a3b8'}15`,
-                          borderColor: `${categoryColors[item.category] || '#94a3b8'}30`,
-                        }}
-                      >
-                        {item.category}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-[13px] font-semibold text-white text-right">
-                      {item.requestCount.toLocaleString()}
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <div className="flex justify-center">
-                        <Sparkline data={item.weeklyData} trend={item.trend} />
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <div className={`inline-flex items-center gap-1 ${trendColors[item.trend]}`}>
-                        <TrendIcon className="w-3 h-3" />
-                        <span className="text-[12px] font-semibold">
-                          {item.trendPercentage > 0 ? '+' : ''}{item.trendPercentage}%
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-[12px] text-slate-500 text-right">{item.lastRequested}</td>
-                  </tr>
+                  <span className={`inline-flex items-center gap-1 ${trendColors[item.trend]}`}>
+                    <TrendIcon className="w-3 h-3" aria-hidden="true" />
+                    <span className="text-[12px] font-semibold">
+                      {item.trendPercentage > 0 ? '+' : ''}
+                      {item.trendPercentage}%
+                    </span>
+                    <span className="sr-only">{item.trend}</span>
+                  </span>
                 );
-              })}
-            </tbody>
-          </table>
-        </div>
+              },
+            },
+            {
+              key: 'lastRequested',
+              label: 'Last Req.',
+              srLabel: 'uested',
+              align: 'right',
+              sortable: true,
+              render: (item) => <span className="text-[12px] text-slate-300">{item.lastRequested}</span>,
+            },
+          ]}
+        />
       </ChartCard>
     </div>
   );

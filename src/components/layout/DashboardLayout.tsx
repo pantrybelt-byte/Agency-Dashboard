@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { useAuth } from '../../hooks/useAuth';
+import { useDashboardFilters } from '../../hooks/useDashboardFilters';
 import { RouteFallback } from '../ui/RouteFallback';
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
@@ -23,7 +24,8 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
 
 export const DashboardLayout = () => {
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
+  const { resolved } = useDashboardFilters();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
@@ -54,6 +56,19 @@ export const DashboardLayout = () => {
         />
 
         <main id="main-content" tabIndex={-1} className="flex-1 p-5 sm:p-8 max-w-7xl w-full mx-auto">
+          {/* Paper-only masthead. The screen header is hidden when printing,
+              so without this a printed report carries no provenance. */}
+          <div className="print-header mb-6 pb-4 border-b border-slate-300">
+            <p className="text-[16px] font-bold">AccessBelt Analytics — {pageInfo.title}</p>
+            <p className="text-[11px]">
+              {user?.organization ?? 'AccessBelt'} · Reporting period {resolved.label} · Generated{' '}
+              {new Date().toLocaleDateString('en-US', { dateStyle: 'long' })}
+            </p>
+            <p className="text-[11px]">
+              Partnered with United Way River Region &amp; USDA · Demonstration data
+            </p>
+          </div>
+
           <Suspense fallback={<RouteFallback />}>
             <Outlet />
           </Suspense>

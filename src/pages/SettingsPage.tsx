@@ -192,7 +192,7 @@ export const SettingsPage: React.FC = () => {
                 )}
                 <button
                   onClick={() => handleDeleteAlert(alert.id)}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-white/[0.06] transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-white/[0.06] transition-colors cursor-pointer"
                   title="Delete alert"
                 >
                   <Trash2 className="w-4 h-4" />

@@ -6,6 +6,7 @@ import {
 import { MousePointerClick, ScanLine, Bell, Search, Navigation, TrendingUp, ArrowUpRight, Download } from 'lucide-react';
 import { MetricCard } from '../components/ui/MetricCard';
 import { ChartCard } from '../components/ui/ChartCard';
+import { DataTable } from '../components/ui/DataTable';
 import { mockDailyInteractions, mockPantryMetrics } from '../data/mockData';
 import { exportToCSV } from '../utils/csvExport';
 
@@ -105,6 +106,15 @@ export const PantryInteractionsPage: React.FC = () => {
       <ChartCard
         title="Daily Interactions"
         subtitle="All interaction types across 30-day window"
+        dataTable={{
+          columns: ['Date', 'Check-ins', 'Item scans', 'Notification views'],
+          rows: mockDailyInteractions.map((day) => [
+            day.date,
+            day.checkIns,
+            day.itemScans,
+            day.notificationViews,
+          ]),
+        }}
       >
         <div className="h-[320px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -164,7 +174,7 @@ export const PantryInteractionsPage: React.FC = () => {
                 value={searchPantry}
                 onChange={(e) => setSearchPantry(e.target.value)}
                 placeholder="Search Pantry..."
-                className="px-3 py-1 text-[12px] bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
+                className="px-3 py-1 text-[12px] bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
               />
               <button
                 onClick={handleExportLeaderboardCSV}
@@ -176,47 +186,74 @@ export const PantryInteractionsPage: React.FC = () => {
             </div>
           }
         >
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-white/[0.06]">
-                  <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-left">#</th>
-                  <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-left">Pantry</th>
-                  <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">Visits</th>
-                  <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">Items</th>
-                  <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">Growth</th>
-                  <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">Avg/Day</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedPantries.map((pantry, idx) => (
-                  <tr
-                    key={pantry.id}
-                    onClick={() => setSelectedPantry(selectedPantry === pantry.id ? null : pantry.id)}
-                    className={`border-b border-white/[0.03] cursor-pointer transition-colors ${
-                      selectedPantry === pantry.id ? 'bg-emerald-500/[0.06]' : 'hover:bg-white/[0.03]'
+          <DataTable
+            caption="Pantries ranked by total visits. Select a pantry to see its detail."
+            data={sortedPantries}
+            rowKey={(pantry) => pantry.id}
+            initialSortKey="totalVisits"
+            emptyMessage={`No pantries match “${searchPantry}”.`}
+            onRowClick={(pantry) => setSelectedPantry(selectedPantry === pantry.id ? null : pantry.id)}
+            isRowSelected={(pantry) => selectedPantry === pantry.id}
+            rowLabel={(pantry) => `Show detail for ${pantry.name}`}
+            columns={[
+              {
+                key: 'name',
+                label: 'Pantry',
+                sortable: true,
+                isRowTrigger: true,
+                render: (pantry) => (
+                  <span className="block">
+                    <span className="block text-[13px] font-medium text-white">{pantry.name}</span>
+                    <span className="block text-[11px] text-slate-400">
+                      {pantry.county} Co. · {pantry.type}
+                    </span>
+                  </span>
+                ),
+              },
+              {
+                key: 'totalVisits',
+                label: 'Visits',
+                align: 'right',
+                sortable: true,
+                render: (pantry) => (
+                  <span className="font-semibold text-white">{pantry.totalVisits.toLocaleString()}</span>
+                ),
+              },
+              {
+                key: 'totalItemsDistributed',
+                label: 'Items',
+                align: 'right',
+                sortable: true,
+                render: (pantry) => (
+                  <span className="text-slate-200">{pantry.totalItemsDistributed.toLocaleString()}</span>
+                ),
+              },
+              {
+                key: 'growthRate',
+                label: 'Growth',
+                align: 'right',
+                sortable: true,
+                render: (pantry) => (
+                  <span
+                    className={`text-[12px] font-semibold ${
+                      pantry.growthRate > 0 ? 'text-emerald-300' : 'text-red-300'
                     }`}
                   >
-                    <td className="py-3 px-3 text-[13px] text-slate-500 font-medium">{idx + 1}</td>
-                    <td className="py-3 px-3">
-                      <div>
-                        <p className="text-[13px] font-medium text-white">{pantry.name}</p>
-                        <p className="text-[11px] text-slate-500">{pantry.county} Co. · {pantry.type}</p>
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-[13px] font-semibold text-white text-right">{pantry.totalVisits.toLocaleString()}</td>
-                    <td className="py-3 px-3 text-[13px] text-slate-300 text-right">{pantry.totalItemsDistributed.toLocaleString()}</td>
-                    <td className="py-3 px-3 text-right">
-                      <span className={`text-[12px] font-semibold ${pantry.growthRate > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {pantry.growthRate > 0 ? '+' : ''}{pantry.growthRate}%
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-[13px] text-slate-400 text-right">{pantry.avgDailyVisits}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    {pantry.growthRate > 0 ? '+' : ''}
+                    {pantry.growthRate}%
+                  </span>
+                ),
+              },
+              {
+                key: 'avgDailyVisits',
+                label: 'Avg/Day',
+                srLabel: ' average visits per day',
+                align: 'right',
+                sortable: true,
+                render: (pantry) => <span className="text-slate-300">{pantry.avgDailyVisits}</span>,
+              },
+            ]}
+          />
         </ChartCard>
 
         {/* Pantry Detail Panel */}
@@ -255,7 +292,7 @@ export const PantryInteractionsPage: React.FC = () => {
                 <div className="space-y-1.5">
                   {activePantry.topItems.map((item, idx) => (
                     <div key={item} className="flex items-center gap-2 py-1.5 px-2.5 rounded-lg bg-white/[0.02]">
-                      <span className="text-[11px] font-bold text-slate-500 w-4">{idx + 1}</span>
+                      <span className="text-[11px] font-bold text-slate-400 w-4">{idx + 1}</span>
                       <span className="text-[12px] text-slate-300">{item}</span>
                     </div>
                   ))}
@@ -271,17 +308,17 @@ export const PantryInteractionsPage: React.FC = () => {
                 </div>
               </div>
 
-              <p className="text-[11px] text-slate-500 text-center">
+              <p className="text-[11px] text-slate-400 text-center">
                 Last updated {activePantry.lastUpdated}
               </p>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="w-16 h-16 rounded-2xl bg-white/[0.03] flex items-center justify-center mb-4">
-                <ArrowUpRight className="w-6 h-6 text-slate-500" />
+                <ArrowUpRight className="w-6 h-6 text-slate-400" />
               </div>
               <p className="text-[13px] text-slate-400">Click a row in the leaderboard</p>
-              <p className="text-[12px] text-slate-500 mt-1">to view pantry details</p>
+              <p className="text-[12px] text-slate-400 mt-1">to view pantry details</p>
             </div>
           )}
         </ChartCard>

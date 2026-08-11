@@ -4,6 +4,7 @@ import {
   BarChart3, MapPin, Store, Package, FileText, Sliders
 } from 'lucide-react';
 import { ChartCard } from '../components/ui/ChartCard';
+import { DataTable } from '../components/ui/DataTable';
 import { mockReportTemplates, mockGeneratedReports, mockPantryMetrics, mockRequestedItems, mockFoodDesertZones } from '../data/mockData';
 import { exportToCSV } from '../utils/csvExport';
 
@@ -97,12 +98,12 @@ export const ReportsPage: React.FC = () => {
               
               <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
                 {template.lastGenerated ? (
-                  <p className="text-[11px] text-slate-500 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-slate-500" />
+                  <p className="text-[11px] text-slate-400 flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-slate-400" />
                     {template.lastGenerated}
                   </p>
                 ) : (
-                  <span className="text-[11px] text-slate-500">On-demand</span>
+                  <span className="text-[11px] text-slate-400">On-demand</span>
                 )}
                 <button
                   onClick={(e) => {
@@ -175,63 +176,87 @@ export const ReportsPage: React.FC = () => {
         title="Report History"
         subtitle="Previously generated reports available for download"
       >
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-white/[0.06]">
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-left">Report</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-left">Date Range</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-left">Generated</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-center">Status</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">Size</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockGeneratedReports.map((report) => (
-                <tr key={report.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
-                  <td className="py-3 px-3">
-                    <p className="text-[13px] font-medium text-white">{report.name}</p>
-                  </td>
-                  <td className="py-3 px-3 text-[12px] text-slate-400">{report.dateRange}</td>
-                  <td className="py-3 px-3 text-[12px] text-slate-400">{report.generatedAt}</td>
-                  <td className="py-3 px-3 text-center">
-                    <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                      report.status === 'ready'
-                        ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20'
-                        : report.status === 'generating'
-                        ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
-                        : 'text-red-400 bg-red-500/10 border border-red-500/20'
-                    }`}>
-                      {report.status === 'ready' && <CheckCircle className="w-3 h-3" />}
-                      {report.status === 'generating' && <Loader2 className="w-3 h-3 animate-spin" />}
-                      {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-                    </span>
-                  </td>
-                  <td className="py-3 px-3 text-[12px] text-slate-400 text-right font-mono">{report.fileSize}</td>
-                  <td className="py-3 px-3 text-right">
-                    <div className="flex items-center gap-1 justify-end">
-                      <button
-                        onClick={() => handleDownloadReportCSV(report.name)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-                        title="Download CSV Data"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => window.print()}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-                        title="Print PDF View"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          caption="Previously generated reports, with download and print actions"
+          data={mockGeneratedReports}
+          rowKey={(report) => report.id}
+          emptyMessage="No reports have been generated yet."
+          columns={[
+            {
+              key: 'name',
+              label: 'Report',
+              sortable: true,
+              render: (report) => <span className="font-medium text-white">{report.name}</span>,
+            },
+            {
+              key: 'dateRange',
+              label: 'Date Range',
+              render: (report) => <span className="text-[12px] text-slate-300">{report.dateRange}</span>,
+            },
+            {
+              key: 'generatedAt',
+              label: 'Generated',
+              sortable: true,
+              render: (report) => <span className="text-[12px] text-slate-300">{report.generatedAt}</span>,
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              align: 'center',
+              sortable: true,
+              render: (report) => (
+                <span
+                  className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                    report.status === 'ready'
+                      ? 'text-emerald-300 bg-emerald-500/10 border border-emerald-500/25'
+                      : report.status === 'generating'
+                        ? 'text-amber-300 bg-amber-500/10 border border-amber-500/25'
+                        : 'text-red-300 bg-red-500/10 border border-red-500/25'
+                  }`}
+                >
+                  {report.status === 'ready' && <CheckCircle className="w-3 h-3" aria-hidden="true" />}
+                  {report.status === 'generating' && (
+                    <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+                  )}
+                  {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
+                </span>
+              ),
+            },
+            {
+              key: 'fileSize',
+              label: 'Size',
+              align: 'right',
+              render: (report) => (
+                <span className="text-[12px] text-slate-300 font-mono">{report.fileSize}</span>
+              ),
+            },
+            {
+              key: 'actions',
+              label: 'Actions',
+              align: 'right',
+              render: (report) => (
+                <span className="flex items-center gap-1 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadReportCSV(report.name)}
+                    className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+                    aria-label={`Download ${report.name} as CSV`}
+                  >
+                    <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+                    aria-label={`Print ${report.name}`}
+                  >
+                    <Printer className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                </span>
+              ),
+            },
+          ]}
+        />
       </ChartCard>
     </div>
   );

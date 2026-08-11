@@ -56,27 +56,54 @@ export const Sidebar: React.FC<SidebarProps> = ({
   `;
 
   const renderLink = (item: { label: string; path: string; icon: React.ElementType }) => (
-    <NavLink
-      key={item.path}
-      to={item.path}
-      end={item.path === '/'}
-      onClick={onCloseMobile}
-      aria-label={item.label}
-      className={linkClasses}
-    >
-      <item.icon className="w-[18px] h-[18px] shrink-0 opacity-90" aria-hidden="true" />
-      {!isCollapsed && <span className="truncate">{item.label}</span>}
-    </NavLink>
+    <li key={item.path}>
+      <NavLink
+        to={item.path}
+        end={item.path === '/'}
+        onClick={onCloseMobile}
+        // When collapsed the label is not rendered, so it has to come from
+        // aria-label instead — otherwise the link is just an icon.
+        aria-label={isCollapsed ? item.label : undefined}
+        className={linkClasses}
+      >
+        <item.icon className="w-[18px] h-[18px] shrink-0 opacity-90" aria-hidden="true" />
+        {!isCollapsed && <span className="truncate">{item.label}</span>}
+      </NavLink>
+    </li>
   );
 
-  const sectionLabel = (text: string) =>
-    !isCollapsed ? (
-      <p className="px-3 pt-5 pb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
-        {text}
-      </p>
-    ) : (
-      <div className="my-2 mx-3 border-t border-white/[0.06]" />
+  /**
+   * Section headings double as the accessible name for each nav group, so the
+   * groups stay distinguishable when the sidebar collapses to icons.
+   */
+  const renderSection = (
+    text: string,
+    items: { label: string; path: string; icon: React.ElementType }[],
+  ) => {
+    const headingId = `sidebar-section-${text.toLowerCase()}`;
+    return (
+      <li>
+        {isCollapsed ? (
+          <>
+            <span id={headingId} className="sr-only">
+              {text}
+            </span>
+            <div className="my-2 mx-3 border-t border-white/[0.06]" aria-hidden="true" />
+          </>
+        ) : (
+          <h2
+            id={headingId}
+            className="px-3 pt-5 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-widest"
+          >
+            {text}
+          </h2>
+        )}
+        <ul aria-labelledby={headingId} className="space-y-0.5 list-none p-0 m-0">
+          {items.map(renderLink)}
+        </ul>
+      </li>
     );
+  };
 
   return (
     <>
@@ -89,7 +116,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       <aside
-        aria-label="Main Navigation"
+        aria-label="Dashboard sidebar"
         className={`
           fixed lg:static top-0 bottom-0 left-0 z-50
           bg-[#12141f] border-r border-white/[0.06] flex flex-col justify-between
@@ -109,14 +136,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {!isCollapsed && (
                   <div>
                     <span className="font-bold text-[14px] text-white tracking-tight block">AccessBelt</span>
-                    <span className="text-[10px] text-slate-500 font-medium">Analytics</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Analytics</span>
                   </div>
                 )}
               </div>
 
               <button
                 onClick={onToggleCollapse}
-                className="hidden lg:flex p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/[0.04] transition-colors cursor-pointer"
+                className="hidden lg:flex p-1.5 rounded-lg text-slate-400 hover:text-slate-300 hover:bg-white/[0.04] transition-colors cursor-pointer"
                 title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               >
@@ -126,18 +153,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {/* Navigation Links */}
-          <nav className="px-2 mt-3 space-y-0.5" role="navigation">
-            {sectionLabel('Analytics')}
-            {analyticsNav.map(renderLink)}
-
-            {sectionLabel('Insights')}
-            {insightsNav.map(renderLink)}
-
-            {sectionLabel('Reports')}
-            {reportsNav.map(renderLink)}
-
-            {sectionLabel('Account')}
-            {settingsNav.map(renderLink)}
+          <nav aria-label="Main navigation" className="px-2 mt-3">
+            <ul className="space-y-0.5 list-none p-0 m-0">
+              {renderSection('Analytics', analyticsNav)}
+              {renderSection('Insights', insightsNav)}
+              {renderSection('Reports', reportsNav)}
+              {renderSection('Account', settingsNav)}
+            </ul>
           </nav>
         </div>
 

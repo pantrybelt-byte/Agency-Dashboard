@@ -157,6 +157,12 @@ export const FoodDesertsPage: React.FC = () => {
       <ChartCard
         title="Food Access Score by County (Lowest to Highest)"
         subtitle="Lower scores indicate severe food desert vulnerability"
+        dataTable={{
+          columns: ['County', 'Food access score', 'Status'],
+          rows: sortedZones
+            .slice(0, 20)
+            .map((zone) => [zone.name, zone.foodAccessScore, zone.status]),
+        }}
         action={
           <button
             onClick={handleExportCSV}

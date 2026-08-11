@@ -74,10 +74,12 @@ export const OverviewPage: React.FC = () => {
               Export Executive CSV
             </button>
             <button
+              type="button"
               onClick={() => setShowBanner(false)}
-              className="p-1 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+              aria-label="Dismiss the executive overview notice"
+              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -129,6 +131,16 @@ export const OverviewPage: React.FC = () => {
               : `${resolved.dayCount}-day trend across all pantries`
           }
           className="lg:col-span-2"
+          dataTable={{
+            columns: compareMode
+              ? ['Date', 'Families served (current)', 'Families served (previous)']
+              : ['Date', 'Families served'],
+            rows: mockFamiliesServedSeries.map((point) =>
+              compareMode
+                ? [point.date, point.value, point.previousValue ?? 0]
+                : [point.date, point.value],
+            ),
+          }}
           action={
             compareMode ? (
               <span className="flex items-center gap-1 text-[11px] font-semibold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-lg">
@@ -199,6 +211,10 @@ export const OverviewPage: React.FC = () => {
         <ChartCard
           title="Distribution by Type"
           subtitle="Pantry distribution methods"
+          dataTable={{
+            columns: ['Distribution method', 'Share of pantries (%)'],
+            rows: mockDistributionByType.map((entry) => [entry.category, entry.value]),
+          }}
         >
           <div className="h-[280px] flex flex-col items-center justify-center">
             <ResponsiveContainer width="100%" height={180}>
@@ -247,6 +263,10 @@ export const OverviewPage: React.FC = () => {
           title="Items Distributed by Category"
           subtitle="Total volume breakdown"
           className="lg:col-span-2"
+          dataTable={{
+            columns: ['Category', 'Items distributed'],
+            rows: mockCategoryBreakdown.map((entry) => [entry.category, entry.value]),
+          }}
         >
           <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -282,6 +302,15 @@ export const OverviewPage: React.FC = () => {
         <ChartCard
           title="Top Pantries"
           subtitle="By total visits this period"
+          dataTable={{
+            columns: ['Pantry', 'County', 'Total visits', 'Growth rate (%)'],
+            rows: topPantries.map((pantry) => [
+              pantry.name,
+              pantry.county,
+              pantry.totalVisits,
+              pantry.growthRate,
+            ]),
+          }}
           action={
             <button
               onClick={handleExportTopPantriesCSV}
@@ -302,7 +331,7 @@ export const OverviewPage: React.FC = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[13px] font-medium text-white truncate">{pantry.name}</p>
-                  <p className="text-[11px] text-slate-500">{pantry.county} County</p>
+                  <p className="text-[11px] text-slate-400">{pantry.county} County</p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-[13px] font-semibold text-white">{pantry.totalVisits.toLocaleString()}</p>

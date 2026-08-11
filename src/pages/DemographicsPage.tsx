@@ -5,6 +5,7 @@ import {
 import { Users, Download, UserCheck, Heart, ShieldCheck, MapPin } from 'lucide-react';
 import { MetricCard } from '../components/ui/MetricCard';
 import { ChartCard } from '../components/ui/ChartCard';
+import { DataTable } from '../components/ui/DataTable';
 import { mockDemographics } from '../data/mockData';
 import { exportToCSV } from '../utils/csvExport';
 import {
@@ -122,7 +123,14 @@ export const DemographicsPage: React.FC = () => {
       {/* Main Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Age Group Distribution */}
-        <ChartCard title="Age Group Distribution" subtitle="Percent of total population served">
+        <ChartCard
+          title="Age Group Distribution"
+          subtitle="Percent of total population served"
+          dataTable={{
+            columns: ['Age group', 'Individuals', 'Share (%)'],
+            rows: demographics.ageGroups.map((entry) => [entry.group, entry.count, entry.percentage]),
+          }}
+        >
           <div className="h-[240px] flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -155,7 +163,14 @@ export const DemographicsPage: React.FC = () => {
         </ChartCard>
 
         {/* Visitor Frequency & Recency */}
-        <ChartCard title="Visitor Type & Frequency" subtitle="First-time vs repeat assistance">
+        <ChartCard
+          title="Visitor Type & Frequency"
+          subtitle="First-time vs repeat assistance"
+          dataTable={{
+            columns: ['Visitor type', 'Families', 'Share (%)'],
+            rows: demographics.visitorTypes.map((entry) => [entry.type, entry.count, entry.percentage]),
+          }}
+        >
           <div className="h-[240px] flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -188,7 +203,14 @@ export const DemographicsPage: React.FC = () => {
         </ChartCard>
 
         {/* Household Size Distribution */}
-        <ChartCard title="Household Size" subtitle="Number of family members per household">
+        <ChartCard
+          title="Household Size"
+          subtitle="Number of family members per household"
+          dataTable={{
+            columns: ['Household size', 'Households', 'Share (%)'],
+            rows: demographics.householdSizes.map((entry) => [entry.size, entry.count, entry.percentage]),
+          }}
+        >
           <div className="h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={demographics.householdSizes} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -206,7 +228,14 @@ export const DemographicsPage: React.FC = () => {
       {/* Racial & Ethnic Demographics + ZIP Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Ethnicity Distribution Card */}
-        <ChartCard title="Racial & Ethnic Demographics" subtitle="USDA Civil Rights Compliance breakdown">
+        <ChartCard
+          title="Racial & Ethnic Demographics"
+          subtitle="USDA Civil Rights Compliance breakdown"
+          dataTable={{
+            columns: ['Category', 'Share (%)'],
+            rows: demographics.ethnicityBreakdown.map((entry) => [entry.category, entry.percentage]),
+          }}
+        >
           <div className="space-y-3.5 my-2">
             {demographics.ethnicityBreakdown.map((item) => (
               <div key={item.category}>
@@ -237,7 +266,7 @@ export const DemographicsPage: React.FC = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search ZIP or County..."
-                className="px-3 py-1 text-[12px] bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
+                className="px-3 py-1 text-[12px] bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
               />
               <button
                 onClick={handleExportZipCSV}
@@ -249,34 +278,56 @@ export const DemographicsPage: React.FC = () => {
             </div>
           }
         >
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-white/[0.06]">
-                  <th className="py-2.5 px-3 text-[11px] font-semibold uppercase text-slate-500 text-left">ZIP</th>
-                  <th className="py-2.5 px-3 text-[11px] font-semibold uppercase text-slate-500 text-left">Community / Area</th>
-                  <th className="py-2.5 px-3 text-[11px] font-semibold uppercase text-slate-500 text-left">County</th>
-                  <th className="py-2.5 px-3 text-[11px] font-semibold uppercase text-slate-500 text-right">Families Served</th>
-                  <th className="py-2.5 px-3 text-[11px] font-semibold uppercase text-slate-500 text-right">Growth Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredZipCodes.map((item) => (
-                  <tr key={item.zip} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
-                    <td className="py-2.5 px-3 text-[13px] font-mono text-emerald-400 font-medium">{item.zip}</td>
-                    <td className="py-2.5 px-3 text-[13px] text-white font-medium">{item.community}</td>
-                    <td className="py-2.5 px-3 text-[13px] text-slate-400">{item.county}</td>
-                    <td className="py-2.5 px-3 text-[13px] text-white font-bold text-right">{item.familiesServed.toLocaleString()}</td>
-                    <td className="py-2.5 px-3 text-right">
-                      <span className={`text-[12px] font-semibold ${item.growthRate >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {item.growthRate >= 0 ? '+' : ''}{item.growthRate}%
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            caption="Families served by ZIP code across the River Region"
+            data={filteredZipCodes}
+            rowKey={(item) => item.zip}
+            initialSortKey="familiesServed"
+            emptyMessage={`No ZIP codes match “${searchTerm}”.`}
+            columns={[
+              {
+                key: 'zip',
+                label: 'ZIP',
+                srLabel: ' code',
+                sortable: true,
+                render: (item) => (
+                  <span className="font-mono text-emerald-300 font-medium">{item.zip}</span>
+                ),
+              },
+              {
+                key: 'community',
+                label: 'Community / Area',
+                sortable: true,
+                render: (item) => <span className="text-white font-medium">{item.community}</span>,
+              },
+              { key: 'county', label: 'County', sortable: true },
+              {
+                key: 'familiesServed',
+                label: 'Families Served',
+                align: 'right',
+                sortable: true,
+                render: (item) => (
+                  <span className="text-white font-bold">{item.familiesServed.toLocaleString()}</span>
+                ),
+              },
+              {
+                key: 'growthRate',
+                label: 'Growth Rate',
+                align: 'right',
+                sortable: true,
+                render: (item) => (
+                  <span
+                    className={`text-[12px] font-semibold ${
+                      item.growthRate >= 0 ? 'text-emerald-300' : 'text-red-300'
+                    }`}
+                  >
+                    {item.growthRate >= 0 ? '+' : ''}
+                    {item.growthRate}%
+                  </span>
+                ),
+              },
+            ]}
+          />
         </ChartCard>
       </div>
     </div>

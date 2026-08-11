@@ -38,7 +38,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
                 {trend > 0 ? '+' : ''}{trend}%
               </span>
               {trendLabel && (
-                <span className="text-[11px] text-slate-500 ml-0.5">{trendLabel}</span>
+                <span className="text-[11px] text-slate-400 ml-0.5">{trendLabel}</span>
               )}
             </div>
           )}

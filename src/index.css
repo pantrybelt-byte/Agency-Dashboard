@@ -106,7 +106,35 @@ select:focus {
 
 input::placeholder,
 textarea::placeholder {
-  color: #64748b;
+  /* slate-500 measured 3.5:1 against the field background. slate-400 clears AA. */
+  color: #94a3b8;
+}
+
+/* ============================================
+   Focus Visibility — WCAG 2.4.7
+   ============================================ */
+
+/*
+ * A colour-only focus hint is not a focus indicator. Everything interactive
+ * gets a real ring, and `:focus-visible` keeps it off mouse clicks.
+ */
+:where(a, button, [role='button'], [role='menuitem'], summary, [tabindex]):focus-visible {
+  outline: 2px solid #34d399;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid #34d399;
+  outline-offset: 1px;
+}
+
+/* The main region is focused programmatically by the skip link; it should not
+   draw a ring when it receives that focus. */
+main:focus {
+  outline: none;
 }
 
 /* ============================================
@@ -206,14 +234,62 @@ textarea::placeholder {
 .delay-400 { animation-delay: 400ms; }
 
 /* ============================================
+   Reduced Motion
+   ============================================ */
+
+/*
+ * Honour the OS-level preference. Animations collapse to a single frame
+ * rather than being removed, so nothing that relies on an animation's end
+ * state disappears. Spinners keep turning, slowly, because a frozen spinner
+ * reads as a hung page.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-spin {
+    animation: spin 1.5s linear infinite !important;
+  }
+
+  .animate-pulse-glow,
+  .animate-shimmer,
+  .animate-gradient {
+    animation: none !important;
+  }
+}
+
+/* ============================================
    Print Styles — Report Friendly
    ============================================ */
 
 @media print {
+  @page {
+    margin: 14mm;
+  }
+
   html, body {
     background: white !important;
     color: #1a1a2e !important;
     font-size: 12px !important;
+  }
+
+  /* Navigation chrome is not part of a report. The sidebar, the sticky
+     header controls and the skip link were all printing before. */
+  aside,
+  header,
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    max-width: none !important;
   }
 
   .card, .card-glass, .card-hover {
@@ -223,11 +299,27 @@ textarea::placeholder {
     break-inside: avoid;
   }
 
-  .no-print {
+  /* The dark theme relies on translucent white overlays that vanish on paper. */
+  .card *, .card-glass *, .card-hover * {
+    color: #1a1a2e !important;
+  }
+
+  /* Text alternatives are for assistive technology, not for paper. */
+  .sr-only {
     display: none !important;
   }
 
   .print-break {
     page-break-before: always;
   }
+
+  /* Give the printed page the provenance a grant reviewer needs. */
+  .print-header {
+    display: block !important;
+  }
+}
+
+/* Only ever visible on paper. */
+.print-header {
+  display: none;
 }
