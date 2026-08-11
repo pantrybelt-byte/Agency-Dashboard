@@ -1,20 +1,21 @@
 import React, { useState } from 'react';
 import { Building2, Mail, MapPin, Bell, Key, Shield, Plus, Trash2, CheckCircle, Database } from 'lucide-react';
 import { ChartCard } from '../components/ui/ChartCard';
-import type { AgencyUser } from '../types';
 import { mockThresholdAlerts } from '../data/mockData';
+import { useAuth } from '../hooks/useAuth';
 
-interface SettingsPageProps {
-  user: AgencyUser;
-}
-
-export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
+export const SettingsPage: React.FC = () => {
+  const { user } = useAuth();
   const [alerts, setAlerts] = useState(mockThresholdAlerts);
   const [showAddAlert, setShowAddAlert] = useState(false);
   const [newCounty, setNewCounty] = useState('Lowndes County');
   const [newMetric, setNewMetric] = useState('Food Access Score');
   const [newThreshold, setNewThreshold] = useState(25);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // RequireAuth guarantees a user before this renders; this satisfies the
+  // type checker without a non-null assertion.
+  if (!user) return null;
 
   const handleAddAlert = (e: React.FormEvent) => {
     e.preventDefault();

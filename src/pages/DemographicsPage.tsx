@@ -7,6 +7,14 @@ import { MetricCard } from '../components/ui/MetricCard';
 import { ChartCard } from '../components/ui/ChartCard';
 import { mockDemographics } from '../data/mockData';
 import { exportToCSV } from '../utils/csvExport';
+import {
+  AGE_GROUP_CHILDREN,
+  AGE_GROUP_SENIORS,
+  VISITOR_TYPE_FIRST_TIME,
+  averageHouseholdSize,
+  countByAgeGroup,
+  countByVisitorType,
+} from '../utils/demographics';
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string; color: string }>; label?: string }) => {
   if (!active || !payload) return null;
@@ -25,6 +33,13 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 export const DemographicsPage: React.FC = () => {
   const demographics = mockDemographics;
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Derived from the dataset rather than hardcoded, so these move with the
+  // data once Firebase supplies it.
+  const childrenServed = countByAgeGroup(demographics, AGE_GROUP_CHILDREN);
+  const seniorsServed = countByAgeGroup(demographics, AGE_GROUP_SENIORS);
+  const firstTimeRecipients = countByVisitorType(demographics, VISITOR_TYPE_FIRST_TIME);
+  const avgHouseholdSize = averageHouseholdSize(demographics);
 
   const filteredZipCodes = demographics.zipCodeBreakdown.filter(
     (item) =>
@@ -71,7 +86,7 @@ export const DemographicsPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           label="Children Impacted (0–17)"
-          value="5,486"
+          value={childrenServed}
           trend={15.4}
           trendLabel="vs last period"
           icon={<Heart className="w-5 h-5 text-indigo-400" />}
@@ -79,7 +94,7 @@ export const DemographicsPage: React.FC = () => {
         />
         <MetricCard
           label="Seniors Served (60+)"
-          value="3,114"
+          value={seniorsServed}
           trend={18.2}
           trendLabel="vs last period"
           icon={<Users className="w-5 h-5 text-emerald-400" />}
@@ -88,7 +103,7 @@ export const DemographicsPage: React.FC = () => {
         />
         <MetricCard
           label="First-Time Recipients"
-          value="2,817"
+          value={firstTimeRecipients}
           trend={22.0}
           trendLabel="vs last period"
           icon={<UserCheck className="w-5 h-5 text-blue-400" />}
@@ -97,7 +112,7 @@ export const DemographicsPage: React.FC = () => {
         />
         <MetricCard
           label="Avg Household Size"
-          value="3.8 Persons"
+          value={`${avgHouseholdSize} Persons`}
           icon={<MapPin className="w-5 h-5 text-amber-400" />}
           glowClass="metric-glow-amber"
           animationDelay="delay-300"

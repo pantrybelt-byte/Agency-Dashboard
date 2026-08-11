@@ -14,11 +14,7 @@ import {
   mockPantryMetrics,
 } from '../data/mockData';
 import { exportToCSV } from '../utils/csvExport';
-
-interface OverviewPageProps {
-  compareMode?: boolean;
-  dateRange?: string;
-}
+import { useDashboardFilters } from '../hooks/useDashboardFilters';
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string; color: string }>; label?: string }) => {
   if (!active || !payload) return null;
@@ -34,7 +30,8 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   );
 };
 
-export const OverviewPage: React.FC<OverviewPageProps> = ({ compareMode = false }) => {
+export const OverviewPage: React.FC = () => {
+  const { compareMode, resolved } = useDashboardFilters();
   const [showBanner, setShowBanner] = useState(true);
   const summary = mockRegionSummary;
   const topPantries = [...mockPantryMetrics]
@@ -92,7 +89,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ compareMode = false 
           label="Families Served"
           value={summary.totalFamiliesServed}
           trend={summary.familiesServedTrend}
-          trendLabel={compareMode ? 'vs previous 30 days' : 'vs last period'}
+          trendLabel={compareMode ? `vs previous ${resolved.dayCount} days` : 'vs last period'}
           icon={<Users className="w-5 h-5 text-emerald-400" />}
           glowClass="metric-glow-emerald"
         />
@@ -107,7 +104,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ compareMode = false 
           label="Items Distributed"
           value={summary.totalItemsDistributed}
           trend={summary.itemsDistributedTrend}
-          trendLabel={compareMode ? 'vs previous 30 days' : 'vs last period'}
+          trendLabel={compareMode ? `vs previous ${resolved.dayCount} days` : 'vs last period'}
           icon={<Package className="w-5 h-5 text-amber-400" />}
           glowClass="metric-glow-amber"
           animationDelay="delay-200"
@@ -126,7 +123,11 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ compareMode = false 
         {/* Families Served Area Chart */}
         <ChartCard
           title="Families Served Over Time"
-          subtitle={compareMode ? 'Comparing Current Period (Green) vs Previous Period (Indigo)' : '30-day trend across all pantries'}
+          subtitle={
+            compareMode
+              ? 'Comparing current period (green) against the previous period (indigo)'
+              : `${resolved.dayCount}-day trend across all pantries`
+          }
           className="lg:col-span-2"
           action={
             compareMode ? (

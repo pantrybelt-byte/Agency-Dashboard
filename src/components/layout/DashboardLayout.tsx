@@ -1,44 +1,47 @@
-import React, { useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Suspense, useState } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
-import type { AgencyUser, DateRangePreset } from '../../types';
-
-interface DashboardLayoutProps {
-  children: React.ReactNode;
-  user: AgencyUser;
-  onSignOut: () => void;
-}
+import { useAuth } from '../../hooks/useAuth';
+import { RouteFallback } from '../ui/RouteFallback';
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/': { title: 'Overview', subtitle: 'Region-wide analytics & period comparison' },
-  '/demographics': { title: 'Demographics & Community', subtitle: 'Age, household, and community ZIP breakdown' },
-  '/food-deserts': { title: 'Food Deserts', subtitle: 'Food access analysis by county & census tract' },
+  '/demographics': {
+    title: 'Demographics & Community',
+    subtitle: 'Age, household, and community ZIP breakdown',
+  },
+  '/food-deserts': {
+    title: 'Food Deserts',
+    subtitle: 'Food access analysis by county & census tract',
+  },
   '/interactions': { title: 'Pantry Interactions', subtitle: 'App engagement and pantry activity' },
   '/most-requested': { title: 'Most Requested Items', subtitle: 'Item demand intelligence' },
   '/reports': { title: 'Reports & Export', subtitle: 'Generate and download reports' },
   '/settings': { title: 'Settings', subtitle: 'Agency account & threshold alert configuration' },
 };
 
-export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
-  children,
-  user,
-  onSignOut,
-}) => {
+export const DashboardLayout = () => {
   const location = useLocation();
+  const { signOut } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [dateRange, setDateRange] = useState<DateRangePreset>('30d');
-  const [compareMode, setCompareMode] = useState(false);
 
-  const pageInfo = pageTitles[location.pathname] || { title: 'Dashboard', subtitle: '' };
+  const pageInfo = pageTitles[location.pathname] ?? { title: 'Dashboard', subtitle: '' };
 
   return (
     <div className="min-h-screen flex bg-[#0f1117] text-slate-100 relative">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-xl focus:bg-emerald-500 focus:text-white focus:font-semibold focus:text-[13px] focus:shadow-lg"
+      >
+        Skip to main content
+      </a>
+
       <Sidebar
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        onSignOut={onSignOut}
+        onSignOut={signOut}
         mobileOpen={mobileSidebarOpen}
         onCloseMobile={() => setMobileSidebarOpen(false)}
       />
@@ -47,34 +50,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         <Header
           pageTitle={pageInfo.title}
           pageSubtitle={pageInfo.subtitle}
-          user={user}
-          dateRange={dateRange}
-          onDateRangeChange={setDateRange}
-          compareMode={compareMode}
-          onToggleCompare={setCompareMode}
-          onSignOut={onSignOut}
           onToggleSidebar={() => setMobileSidebarOpen(true)}
         />
 
-        <main className="flex-1 p-5 sm:p-8 max-w-7xl w-full mx-auto">
-          {/* Pass compareMode via React context or cloneElement if needed */}
-          {React.isValidElement(children)
-            ? React.cloneElement(children as React.ReactElement<{ compareMode?: boolean; dateRange?: DateRangePreset }>, {
-                compareMode,
-                dateRange,
-              })
-            : children}
+        <main id="main-content" tabIndex={-1} className="flex-1 p-5 sm:p-8 max-w-7xl w-full mx-auto">
+          <Suspense fallback={<RouteFallback />}>
+            <Outlet />
+          </Suspense>
         </main>
 
-        {/* Footer */}
         <footer className="border-t border-white/[0.04] py-4 px-8 no-print">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-            <p className="text-[11px] text-slate-600">
-              © 2026 AccessBelt Analytics · Data refreshed real-time (Firebase Ready)
+            <p className="text-[11px] text-slate-400">
+              © 2026 AccessBelt Analytics · Demonstration data — live Firebase integration pending
             </p>
-            <p className="text-[11px] text-slate-600">
-              Partnered with United Way River Region & USDA
-            </p>
+            <p className="text-[11px] text-slate-400">Partnered with United Way River Region &amp; USDA</p>
           </div>
         </footer>
       </div>

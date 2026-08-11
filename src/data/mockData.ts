@@ -12,6 +12,7 @@ import type {
   DemographicsData,
   ThresholdAlert,
 } from '../types';
+import { createSeededRandom } from '../utils/seededRandom';
 
 // ============================================
 // Agency Users with Scoped Permissions
@@ -486,6 +487,7 @@ export const mockRequestedItems: RequestedItem[] = [
 // ============================================
 
 function generateDailyInteractions(): DailyInteractionData[] {
+  const random = createSeededRandom(20260811);
   const data: DailyInteractionData[] = [];
   const startDate = new Date('2026-07-12');
 
@@ -497,11 +499,11 @@ function generateDailyInteractions(): DailyInteractionData[] {
 
     const baseFactor = isWeekend ? 0.6 : 1.0;
     const trendFactor = 1 + (i / 30) * 0.15;
-    const noise = 0.85 + Math.random() * 0.3;
+    const noise = 0.85 + random() * 0.3;
 
     const checkIns = Math.round(180 * baseFactor * trendFactor * noise);
     const itemScans = Math.round(320 * baseFactor * trendFactor * noise);
-    const notificationViews = Math.round(450 * baseFactor * trendFactor * (0.8 + Math.random() * 0.4));
+    const notificationViews = Math.round(450 * baseFactor * trendFactor * (0.8 + random() * 0.4));
     const searches = Math.round(95 * baseFactor * trendFactor * noise);
     const directions = Math.round(65 * baseFactor * trendFactor * noise);
 
@@ -525,6 +527,7 @@ export const mockDailyInteractions = generateDailyInteractions();
 // ============================================
 
 function generateFamiliesServedTimeSeries(): TimeSeriesDataPoint[] {
+  const random = createSeededRandom(48271);
   const data: TimeSeriesDataPoint[] = [];
   const startDate = new Date('2026-07-12');
 
@@ -536,7 +539,7 @@ function generateFamiliesServedTimeSeries(): TimeSeriesDataPoint[] {
 
     const base = isWeekend ? 320 : 480;
     const trend = 1 + (i / 30) * 0.12;
-    const noise = 0.88 + Math.random() * 0.24;
+    const noise = 0.88 + random() * 0.24;
 
     const currentVal = Math.round(base * trend * noise);
     const prevVal = Math.round(base * (trend - 0.1) * (noise * 0.95));
