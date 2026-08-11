@@ -89,8 +89,9 @@ export const FoodDesertsPage: React.FC = () => {
           </div>
           <div>
             <h2 className="text-base font-bold text-white leading-tight">Alabama Food Desert Vulnerability Index</h2>
-            <p className="text-[12px] text-slate-400">
-              Interactive 67-County Alabama SVG Vector Heatmap based on USDA & Census metrics. Hover any county for instant stats.
+            <p className="text-[12px] text-slate-300">
+              All 67 counties drawn from US Census cartographic boundaries, shaded by USDA &amp; Census metrics.
+              Hover, or focus with the keyboard, for county statistics.
             </p>
           </div>
         </div>
@@ -143,8 +144,8 @@ export const FoodDesertsPage: React.FC = () => {
 
       {/* Primary Feature: Interactive 67-County Alabama Vector Heatmap */}
       <ChartCard
-        title="Interactive Alabama County Heatmap"
-        subtitle="Hover any county to inspect metrics · Click to highlight and filter detailed breakdown below"
+        title="Alabama county food access map"
+        subtitle="Albers equal-area projection · Hover or focus a county to inspect metrics · Select one to expand its detail below"
       >
         <AlabamaHeatMap
           selectedCountyId={selectedCounty?.id}

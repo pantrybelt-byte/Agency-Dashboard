@@ -94,6 +94,9 @@ function main(): void {
         d: roundPath(d),
         cx: Number(cx.toFixed(PRECISION)),
         cy: Number(cy.toFixed(PRECISION)),
+        // Projected area in square SVG units. Used to decide whether a county
+        // is large enough to carry a legible label at 1x zoom.
+        area: Math.round(pathBuilder.area(countyFeature)),
       };
     })
     .sort((a, b) => a.fips.localeCompare(b.fips));
@@ -107,6 +110,7 @@ function main(): void {
         `    name: ${JSON.stringify(entry.name)},\n` +
         `    labelX: ${entry.cx},\n` +
         `    labelY: ${entry.cy},\n` +
+        `    area: ${entry.area},\n` +
         `    d: '${entry.d}',\n` +
         `  },`,
     )
@@ -127,6 +131,8 @@ export interface CountyGeometry {
   labelX: number;
   /** Projected centroid Y, for label placement. */
   labelY: number;
+  /** Projected area in square SVG units. Drives label-visibility decisions. */
+  area: number;
   /** SVG path data in the coordinate system of ALABAMA_VIEW_BOX. */
   d: string;
 }
