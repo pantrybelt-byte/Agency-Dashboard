@@ -14,8 +14,6 @@ export interface AlabamaCountyData {
   familiesServed: number;
   topRequestedItem: string;
   zipCodes: string[];
-  // SVG grid cell coordinates [col, row, colSpan, rowSpan] for accurate AL map layout
-  grid: { x: number; y: number; w: number; h: number };
 }
 
 // Color lookup helper based on score
@@ -52,7 +50,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 3400,
     topRequestedItem: 'Fresh Apples',
     zipCodes: ['35630', '35633'],
-    grid: { x: 50, y: 10, w: 55, h: 25 },
   },
   {
     id: 'limestone',
@@ -70,7 +67,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 2900,
     topRequestedItem: 'Whole Milk',
     zipCodes: ['35611', '35613'],
-    grid: { x: 108, y: 10, w: 42, h: 25 },
   },
   {
     id: 'madison',
@@ -88,7 +84,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 8400,
     topRequestedItem: 'Chicken Breasts',
     zipCodes: ['35801', '35806'],
-    grid: { x: 153, y: 10, w: 48, h: 25 },
   },
   {
     id: 'jackson',
@@ -106,7 +101,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 2100,
     topRequestedItem: 'Canned Black Beans',
     zipCodes: ['35768', '35752'],
-    grid: { x: 204, y: 10, w: 56, h: 25 },
   },
 
   // --- ROW 2 ---
@@ -126,7 +120,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 2300,
     topRequestedItem: 'White Rice (5lb)',
     zipCodes: ['35661', '35674'],
-    grid: { x: 50, y: 38, w: 50, h: 24 },
   },
   {
     id: 'lawrence',
@@ -144,7 +137,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1800,
     topRequestedItem: 'Peanut Butter',
     zipCodes: ['35650', '35672'],
-    grid: { x: 103, y: 38, w: 42, h: 24 },
   },
   {
     id: 'morgan',
@@ -162,7 +154,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 4100,
     topRequestedItem: 'Eggs (1 dozen)',
     zipCodes: ['35601', '35640'],
-    grid: { x: 148, y: 38, w: 45, h: 24 },
   },
   {
     id: 'marshall',
@@ -180,7 +171,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 3200,
     topRequestedItem: 'Canned Soup',
     zipCodes: ['35976', '35950'],
-    grid: { x: 196, y: 38, w: 32, h: 24 },
   },
   {
     id: 'dekalb',
@@ -198,7 +188,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 2700,
     topRequestedItem: 'Whole Wheat Bread',
     zipCodes: ['35967', '35978'],
-    grid: { x: 231, y: 38, w: 34, h: 24 },
   },
 
   // --- ROW 3 ---
@@ -218,7 +207,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1600,
     topRequestedItem: 'Ground Beef',
     zipCodes: ['35581', '35570'],
-    grid: { x: 50, y: 65, w: 46, h: 24 },
   },
   {
     id: 'cullman',
@@ -236,7 +224,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 3100,
     topRequestedItem: 'Fresh Vegetables',
     zipCodes: ['35055', '35077'],
-    grid: { x: 135, y: 65, w: 48, h: 24 },
   },
   {
     id: 'blount',
@@ -254,7 +241,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 2100,
     topRequestedItem: 'Canned Tuna',
     zipCodes: ['35079', '35121'],
-    grid: { x: 186, y: 65, w: 38, h: 24 },
   },
   {
     id: 'etowah',
@@ -272,7 +258,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 4200,
     topRequestedItem: 'Canned Black Beans',
     zipCodes: ['35901', '35904'],
-    grid: { x: 227, y: 65, w: 38, h: 24 },
   },
   {
     id: 'cherokee',
@@ -290,7 +275,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1200,
     topRequestedItem: 'Infant Formula',
     zipCodes: ['35960', '35983'],
-    grid: { x: 268, y: 65, w: 32, h: 24 },
   },
 
   // --- ROW 4 ---
@@ -310,7 +294,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1500,
     topRequestedItem: 'White Rice (5lb)',
     zipCodes: ['35570', '35594'],
-    grid: { x: 50, y: 92, w: 46, h: 25 },
   },
   {
     id: 'winston',
@@ -328,7 +311,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1300,
     topRequestedItem: 'Canned Meat',
     zipCodes: ['35553', '35541'],
-    grid: { x: 99, y: 92, w: 42, h: 25 },
   },
   {
     id: 'walker',
@@ -346,7 +328,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 3100,
     topRequestedItem: 'Fresh Apples',
     zipCodes: ['35501', '35504'],
-    grid: { x: 144, y: 92, w: 46, h: 25 },
   },
   {
     id: 'stclair',
@@ -364,7 +345,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 2800,
     topRequestedItem: 'Whole Milk',
     zipCodes: ['35125', '35128'],
-    grid: { x: 193, y: 92, w: 42, h: 25 },
   },
   {
     id: 'calhoun',
@@ -382,7 +362,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 4800,
     topRequestedItem: 'Peanut Butter',
     zipCodes: ['36201', '36207'],
-    grid: { x: 238, y: 92, w: 42, h: 25 },
   },
   {
     id: 'cleburne',
@@ -400,7 +379,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 850,
     topRequestedItem: 'Canned Soup',
     zipCodes: ['36264', '36266'],
-    grid: { x: 283, y: 92, w: 28, h: 25 },
   },
 
   // --- ROW 5 ---
@@ -420,7 +398,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 780,
     topRequestedItem: 'Whole Wheat Bread',
     zipCodes: ['35592', '35593'],
-    grid: { x: 50, y: 120, w: 32, h: 26 },
   },
   {
     id: 'fayette',
@@ -438,7 +415,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 920,
     topRequestedItem: 'Eggs (1 dozen)',
     zipCodes: ['35555', '35546'],
-    grid: { x: 85, y: 120, w: 34, h: 26 },
   },
   {
     id: 'jefferson',
@@ -456,7 +432,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 18500,
     topRequestedItem: 'Chicken Breasts',
     zipCodes: ['35203', '35205'],
-    grid: { x: 122, y: 120, w: 72, h: 26 },
   },
   {
     id: 'talladega',
@@ -474,7 +449,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 3900,
     topRequestedItem: 'Ground Beef',
     zipCodes: ['35160', '35150'],
-    grid: { x: 197, y: 120, w: 38, h: 26 },
   },
   {
     id: 'clay',
@@ -492,7 +466,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 740,
     topRequestedItem: 'Canned Black Beans',
     zipCodes: ['36251', '36268'],
-    grid: { x: 238, y: 120, w: 34, h: 26 },
   },
   {
     id: 'randolph',
@@ -510,7 +483,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1250,
     topRequestedItem: 'Fresh Vegetables',
     zipCodes: ['36274', '36278'],
-    grid: { x: 275, y: 120, w: 36, h: 26 },
   },
 
   // --- ROW 6 (TUSCALOOSA / SHELBY / RIVER REGION ACCESS) ---
@@ -530,7 +502,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1100,
     topRequestedItem: 'Rice (5lb)',
     zipCodes: ['35447', '35466'],
-    grid: { x: 50, y: 149, w: 38, h: 28 },
   },
   {
     id: 'tuscaloosa',
@@ -548,7 +519,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 9400,
     topRequestedItem: 'Infant Formula',
     zipCodes: ['35401', '35404'],
-    grid: { x: 91, y: 149, w: 58, h: 28 },
   },
   {
     id: 'shelby',
@@ -566,7 +536,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 4800,
     topRequestedItem: 'Fresh Apples',
     zipCodes: ['35124', '35043'],
-    grid: { x: 152, y: 149, w: 52, h: 28 },
   },
   {
     id: 'coosa',
@@ -584,7 +553,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 680,
     topRequestedItem: 'Canned Soup',
     zipCodes: ['35089', '35072'],
-    grid: { x: 207, y: 149, w: 32, h: 28 },
   },
   {
     id: 'chambers',
@@ -602,7 +570,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1700,
     topRequestedItem: 'Whole Milk',
     zipCodes: ['36863', '36854'],
-    grid: { x: 242, y: 149, w: 34, h: 28 },
   },
 
   // --- ROW 7 (BLACK BELT & RIVER REGION CORE) ---
@@ -622,7 +589,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 620,
     topRequestedItem: 'Fresh Produce Box',
     zipCodes: ['35462', '35443'],
-    grid: { x: 50, y: 180, w: 34, h: 28 },
   },
   {
     id: 'bibb',
@@ -640,7 +606,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1100,
     topRequestedItem: 'Peanut Butter',
     zipCodes: ['35034', '35188'],
-    grid: { x: 87, y: 180, w: 32, h: 28 },
   },
   {
     id: 'chilton',
@@ -658,7 +623,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 2400,
     topRequestedItem: 'Fresh Peaches',
     zipCodes: ['35045', '35085'],
-    grid: { x: 122, y: 180, w: 42, h: 28 },
   },
   {
     id: 'tallapoosa',
@@ -676,7 +640,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 2200,
     topRequestedItem: 'Chicken Breasts',
     zipCodes: ['35010', '35072'],
-    grid: { x: 167, y: 180, w: 38, h: 28 },
   },
   {
     id: 'elmore',
@@ -694,7 +657,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 2890,
     topRequestedItem: 'Canned Soup',
     zipCodes: ['36092', '36054'],
-    grid: { x: 208, y: 180, w: 42, h: 28 },
   },
   {
     id: 'lee',
@@ -712,7 +674,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 6200,
     topRequestedItem: 'Whole Milk',
     zipCodes: ['36801', '36830'],
-    grid: { x: 253, y: 180, w: 42, h: 28 },
   },
 
   // --- ROW 8 (RIVER REGION HEARTLAND: MONTGOMERY, LOWNDES, MACON, DALLAS, AUTAUGA) ---
@@ -732,7 +693,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 840,
     topRequestedItem: 'White Rice (5lb)',
     zipCodes: ['35470', '35460'],
-    grid: { x: 50, y: 211, w: 32, h: 30 },
   },
   {
     id: 'hale',
@@ -750,7 +710,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 950,
     topRequestedItem: 'Canned Black Beans',
     zipCodes: ['36744', '36773'],
-    grid: { x: 85, y: 211, w: 32, h: 30 },
   },
   {
     id: 'perry',
@@ -768,7 +727,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 620,
     topRequestedItem: 'Cooking Oil',
     zipCodes: ['36756', '36793'],
-    grid: { x: 120, y: 211, w: 32, h: 30 },
   },
   {
     id: 'autauga',
@@ -777,7 +735,7 @@ export const alabamaCounties: AlabamaCountyData[] = [
     fips: '01001',
     region: 'River Region',
     foodAccessScore: 62,
-    status: 'Moderate',
+    status: 'Adequate',
     population: 58805,
     povertyRate: 12.8,
     medianIncome: 54210,
@@ -786,7 +744,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1560,
     topRequestedItem: 'Infant Formula',
     zipCodes: ['36067', '36066'],
-    grid: { x: 155, y: 211, w: 34, h: 30 },
   },
   {
     id: 'montgomery',
@@ -804,7 +761,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 6310,
     topRequestedItem: 'Canned Black Beans',
     zipCodes: ['36104', '36116', '36108'],
-    grid: { x: 192, y: 211, w: 38, h: 30 },
   },
   {
     id: 'macon',
@@ -822,7 +778,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 980,
     topRequestedItem: 'Rice',
     zipCodes: ['36083', '36089'],
-    grid: { x: 233, y: 211, w: 34, h: 30 },
   },
   {
     id: 'russell',
@@ -840,7 +795,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 2900,
     topRequestedItem: 'Frozen Chicken',
     zipCodes: ['36867', '36869'],
-    grid: { x: 270, y: 211, w: 32, h: 30 },
   },
 
   // --- ROW 9 ---
@@ -860,7 +814,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 680,
     topRequestedItem: 'Canned Meat',
     zipCodes: ['36904', '36910'],
-    grid: { x: 50, y: 244, w: 32, h: 28 },
   },
   {
     id: 'marengo',
@@ -878,7 +831,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1100,
     topRequestedItem: 'Whole Milk',
     zipCodes: ['36732', '36748'],
-    grid: { x: 85, y: 244, w: 34, h: 28 },
   },
   {
     id: 'dallas',
@@ -896,7 +848,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 850,
     topRequestedItem: 'Frozen Meals',
     zipCodes: ['36701', '36703'],
-    grid: { x: 122, y: 244, w: 34, h: 28 },
   },
   {
     id: 'lowndes',
@@ -914,7 +865,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 740,
     topRequestedItem: 'Fresh Produce Box',
     zipCodes: ['36040', '36032', '36047'],
-    grid: { x: 159, y: 244, w: 34, h: 28 },
   },
   {
     id: 'bullock',
@@ -932,7 +882,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 590,
     topRequestedItem: 'Canned Soup',
     zipCodes: ['36089', '36061'],
-    grid: { x: 196, y: 244, w: 34, h: 28 },
   },
   {
     id: 'barbour',
@@ -950,7 +899,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1400,
     topRequestedItem: 'Rice',
     zipCodes: ['36027', '36016'],
-    grid: { x: 233, y: 244, w: 38, h: 28 },
   },
 
   // --- ROW 10 ---
@@ -970,7 +918,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1200,
     topRequestedItem: 'Eggs (1 dozen)',
     zipCodes: ['36451', '36545'],
-    grid: { x: 65, y: 275, w: 34, h: 28 },
   },
   {
     id: 'monroe',
@@ -988,7 +935,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1100,
     topRequestedItem: 'Fresh Vegetables',
     zipCodes: ['36460', '36471'],
-    grid: { x: 102, y: 275, w: 34, h: 28 },
   },
   {
     id: 'butler',
@@ -1006,7 +952,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1050,
     topRequestedItem: 'Peanut Butter',
     zipCodes: ['36037', '36032'],
-    grid: { x: 139, y: 275, w: 32, h: 28 },
   },
   {
     id: 'crenshaw',
@@ -1024,7 +969,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 780,
     topRequestedItem: 'Whole Wheat Bread',
     zipCodes: ['36049', '36017'],
-    grid: { x: 174, y: 275, w: 26, h: 28 },
   },
   {
     id: 'pike',
@@ -1042,7 +986,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1800,
     topRequestedItem: 'Chicken Breasts',
     zipCodes: ['36081', '36079'],
-    grid: { x: 203, y: 275, w: 32, h: 28 },
   },
   {
     id: 'henry',
@@ -1060,7 +1003,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 920,
     topRequestedItem: 'Canned Black Beans',
     zipCodes: ['36310', '36345'],
-    grid: { x: 238, y: 275, w: 32, h: 28 },
   },
 
   // --- ROW 11 ---
@@ -1080,7 +1022,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 880,
     topRequestedItem: 'Canned Soup',
     zipCodes: ['36518', '36558'],
-    grid: { x: 50, y: 306, w: 34, h: 30 },
   },
   {
     id: 'conecuh',
@@ -1098,7 +1039,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 640,
     topRequestedItem: 'Rice (5lb)',
     zipCodes: ['36401', '36439'],
-    grid: { x: 105, y: 306, w: 34, h: 30 },
   },
   {
     id: 'covington',
@@ -1116,7 +1056,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1900,
     topRequestedItem: 'Ground Beef',
     zipCodes: ['36420', '36467'],
-    grid: { x: 142, y: 306, w: 32, h: 30 },
   },
   {
     id: 'coffee',
@@ -1134,7 +1073,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 2700,
     topRequestedItem: 'Whole Milk',
     zipCodes: ['36330', '36322'],
-    grid: { x: 177, y: 306, w: 32, h: 30 },
   },
   {
     id: 'dale',
@@ -1152,7 +1090,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 2400,
     topRequestedItem: 'Fresh Apples',
     zipCodes: ['36360', '36303'],
-    grid: { x: 212, y: 306, w: 30, h: 30 },
   },
   {
     id: 'houston',
@@ -1170,7 +1107,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 4900,
     topRequestedItem: 'Infant Formula',
     zipCodes: ['36301', '36303'],
-    grid: { x: 245, y: 306, w: 34, h: 30 },
   },
 
   // --- ROW 12 (GULF COAST / SOUTHERN BORDER) ---
@@ -1190,7 +1126,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 12400,
     topRequestedItem: 'Canned Black Beans',
     zipCodes: ['36602', '36608'],
-    grid: { x: 50, y: 339, w: 36, h: 46 },
   },
   {
     id: 'escambia',
@@ -1208,7 +1143,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1850,
     topRequestedItem: 'Peanut Butter',
     zipCodes: ['36426', '36502'],
-    grid: { x: 89, y: 339, w: 68, h: 28 },
   },
   {
     id: 'geneva',
@@ -1226,7 +1160,6 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 1300,
     topRequestedItem: 'Canned Meat',
     zipCodes: ['36340', '36375'],
-    grid: { x: 160, y: 339, w: 65, h: 28 },
   },
   {
     id: 'baldwin',
@@ -1244,6 +1177,22 @@ export const alabamaCounties: AlabamaCountyData[] = [
     familiesServed: 5400,
     topRequestedItem: 'Fresh Produce Box',
     zipCodes: ['36532', '36542'],
-    grid: { x: 90, y: 370, w: 34, h: 24 },
+  },
+  {
+    id: 'wilcox',
+    name: 'Wilcox County',
+    abbrev: 'Wil.',
+    fips: '01131',
+    region: 'Black Belt',
+    foodAccessScore: 17,
+    status: 'Critical',
+    population: 10600,
+    povertyRate: 33.6,
+    medianIncome: 29750,
+    nearestPantryMiles: 15.8,
+    activePantries: 1,
+    familiesServed: 610,
+    topRequestedItem: 'Fresh Produce Box',
+    zipCodes: ['36726', '36769', '36728'],
   },
 ];
