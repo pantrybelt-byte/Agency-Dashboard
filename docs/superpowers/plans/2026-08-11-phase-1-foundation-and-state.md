@@ -1,5 +1,13 @@
 # Phase 1: Foundation, State & Correctness — Implementation Plan
 
+> **IMPLEMENTED 2026-08-11.** This plan has been executed; the work is committed. It is kept as a record of intent and as the reference for how the state layer is put together. A few things landed differently from the plan:
+>
+> - Code splitting was folded into the routing rewrite rather than done as a separate final task, since both rewrote `App.tsx`.
+> - `DataTable` was rebuilt and adopted in the accessibility pass rather than left alone; all four hand-rolled tables now use it.
+> - The login redirect needed to carry the query string, not just the path — the plan's version would have dropped filter state on deep links.
+> - The mobile date picker was fixed here rather than deferred; it needed only a second header row.
+> - `resolveDateRange` gained a timezone-stability test after the UTC handling turned out to be the subtle part.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make every control in the dashboard do what it appears to do, move filter and auth state into two providers with the URL as the source of truth, and stand up a test harness so later phases cannot silently regress it.
