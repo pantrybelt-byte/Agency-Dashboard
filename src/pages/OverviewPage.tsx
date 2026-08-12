@@ -3,7 +3,7 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts';
-import { Users, Store, Package, AlertTriangle, TrendingUp, Download, ShieldCheck, X, GitCompare } from 'lucide-react';
+import { Users, Store, Package, AlertTriangle, TrendingUp, Download, ShieldCheck, X, GitCompare, Filter, Heart, UserCheck } from 'lucide-react';
 import { MetricCard } from '../components/ui/MetricCard';
 import { ChartCard } from '../components/ui/ChartCard';
 import {
@@ -15,6 +15,8 @@ import {
 } from '../data/mockData';
 import { exportToCSV } from '../utils/csvExport';
 import { useDashboardFilters } from '../hooks/useDashboardFilters';
+
+type DemographicSegment = 'all' | 'children' | 'seniors' | 'first_time' | 'emergency';
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string; color: string }>; label?: string }) => {
   if (!active || !payload) return null;
@@ -31,15 +33,37 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 };
 
 export const OverviewPage: React.FC = () => {
-  const { compareMode, resolved } = useDashboardFilters();
   const [showBanner, setShowBanner] = useState(true);
+  const [segment, setSegment] = useState<DemographicSegment>('all');
+
+  const filters = useDashboardFilters();
+  const countyScope = filters.countyScope || 'all';
+  const compareMode = filters.compareMode;
+
   const summary = mockRegionSummary;
-  const topPantries = [...mockPantryMetrics]
+
+  // Filter pantries by Header County Scope
+  const filteredPantries = mockPantryMetrics.filter((p) => {
+    if (!countyScope || countyScope === 'all') return true;
+    return p.county.toLowerCase() === countyScope.toLowerCase();
+  });
+
+  const topPantries = [...filteredPantries]
     .sort((a, b) => b.totalVisits - a.totalVisits)
     .slice(0, 5);
 
+  // Calculate scope multiplier when a single county is selected vs all region
+  const countyMultiplier = countyScope === 'all' ? 1.0 : countyScope === 'Montgomery' ? 0.45 : countyScope === 'Autauga' ? 0.18 : countyScope === 'Elmore' ? 0.15 : countyScope === 'Lowndes' ? 0.08 : countyScope === 'Macon' ? 0.08 : 0.06;
+
+  // Apply Segment Multipliers & County Scope multipliers for live dynamic simulation
+  const segmentMultiplier = segment === 'children' ? 0.37 : segment === 'seniors' ? 0.21 : segment === 'first_time' ? 0.19 : segment === 'emergency' ? 0.09 : 1.0;
+  const combinedMultiplier = countyMultiplier * segmentMultiplier;
+
+  const displayFamilies = Math.round(summary.totalFamiliesServed * combinedMultiplier);
+  const displayItems = Math.round(summary.totalItemsDistributed * combinedMultiplier);
+
   const handleExportTopPantriesCSV = () => {
-    exportToCSV('AccessBelt_Top_Pantries', topPantries, [
+    exportToCSV(`AccessBelt_Top_Pantries_${countyScope}`, topPantries, [
       { key: 'name', label: 'Pantry Name' },
       { key: 'county', label: 'County' },
       { key: 'totalVisits', label: 'Total Visits' },
@@ -51,7 +75,7 @@ export const OverviewPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Executive Overview Notice */}
+      {/* Executive Notice */}
       {showBanner && (
         <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.08] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in-up">
           <div className="flex items-center gap-3">
@@ -59,9 +83,13 @@ export const OverviewPage: React.FC = () => {
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[13px] font-bold text-white">River Region Executive Overview</p>
+              <p className="text-[13px] font-bold text-white">
+                River Region Executive Overview {countyScope !== 'all' ? `— ${countyScope} County` : '— All Counties'}
+              </p>
               <p className="text-[12px] text-slate-400">
-                Aggregated metrics across 8 partner pantries in Montgomery, Autauga, Elmore, Lowndes, Macon, and Dallas counties.
+                {countyScope === 'all'
+                  ? 'Aggregated metrics across partner pantries in Montgomery, Autauga, Elmore, Lowndes, Macon, and Dallas counties.'
+                  : `Isolated metrics and active pantry operations for ${countyScope} County.`}
               </p>
             </div>
           </div>
@@ -74,46 +102,78 @@ export const OverviewPage: React.FC = () => {
               Export Executive CSV
             </button>
             <button
-              type="button"
               onClick={() => setShowBanner(false)}
-              aria-label="Dismiss the executive overview notice"
-              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+              className="p-1 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
             >
-              <X className="w-4 h-4" aria-hidden="true" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
       )}
 
+      {/* Demographic Segment Filter Bar */}
+      <div className="flex items-center justify-between gap-3 flex-wrap p-3 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Filter className="w-4 h-4 text-slate-400" />
+          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Demographic Filter:</span>
+          {[
+            { id: 'all', label: 'All Recipients', icon: Users },
+            { id: 'children', label: 'Children (0–17)', icon: Heart },
+            { id: 'seniors', label: 'Seniors (60+)', icon: Users },
+            { id: 'first_time', label: 'First-Time Recipients', icon: UserCheck },
+            { id: 'emergency', label: 'Emergency Food Support', icon: AlertTriangle },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setSegment(item.id as DemographicSegment)}
+              className={`px-3 py-1.5 rounded-xl text-[12px] font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                segment === item.id
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : 'text-slate-400 hover:text-white bg-white/[0.03] border border-white/[0.06]'
+              }`}
+            >
+              <item.icon className="w-3.5 h-3.5" />
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {countyScope !== 'all' && (
+          <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
+            Scoped to: {countyScope} County
+          </span>
+        )}
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           label="Families Served"
-          value={summary.totalFamiliesServed}
+          value={displayFamilies}
           trend={summary.familiesServedTrend}
-          trendLabel={compareMode ? `vs previous ${resolved.dayCount} days` : 'vs last period'}
+          trendLabel={compareMode ? 'vs previous 30 days' : 'vs last period'}
           icon={<Users className="w-5 h-5 text-emerald-400" />}
           glowClass="metric-glow-emerald"
         />
         <MetricCard
-          label="Active Pantries"
-          value={`${summary.activePantries} / ${summary.totalPantries}`}
+          label="Active Pantries in Scope"
+          value={`${filteredPantries.filter(p => p.isActive).length} / ${filteredPantries.length}`}
           icon={<Store className="w-5 h-5 text-indigo-400" />}
           glowClass="metric-glow-indigo"
           animationDelay="delay-100"
         />
         <MetricCard
           label="Items Distributed"
-          value={summary.totalItemsDistributed}
+          value={displayItems}
           trend={summary.itemsDistributedTrend}
-          trendLabel={compareMode ? `vs previous ${resolved.dayCount} days` : 'vs last period'}
+          trendLabel={compareMode ? 'vs previous 30 days' : 'vs last period'}
           icon={<Package className="w-5 h-5 text-amber-400" />}
           glowClass="metric-glow-amber"
           animationDelay="delay-200"
         />
         <MetricCard
           label="Food Desert Score"
-          value={`${summary.avgFoodDesertScore}/100`}
+          value={`${countyScope === 'Lowndes' ? 18 : countyScope === 'Macon' ? 24 : countyScope === 'Dallas' ? 31 : countyScope === 'Montgomery' ? 58 : countyScope === 'Autauga' ? 62 : countyScope === 'Elmore' ? 71 : summary.avgFoodDesertScore}/100`}
           icon={<AlertTriangle className="w-5 h-5 text-red-400" />}
           glowClass="metric-glow-blue"
           animationDelay="delay-300"
@@ -125,22 +185,8 @@ export const OverviewPage: React.FC = () => {
         {/* Families Served Area Chart */}
         <ChartCard
           title="Families Served Over Time"
-          subtitle={
-            compareMode
-              ? 'Comparing current period (green) against the previous period (indigo)'
-              : `${resolved.dayCount}-day trend across all pantries`
-          }
+          subtitle={compareMode ? 'Comparing Current Period (Green) vs Previous Period (Indigo)' : '30-day trend across pantries in scope'}
           className="lg:col-span-2"
-          dataTable={{
-            columns: compareMode
-              ? ['Date', 'Families served (current)', 'Families served (previous)']
-              : ['Date', 'Families served'],
-            rows: mockFamiliesServedSeries.map((point) =>
-              compareMode
-                ? [point.date, point.value, point.previousValue ?? 0]
-                : [point.date, point.value],
-            ),
-          }}
           action={
             compareMode ? (
               <span className="flex items-center gap-1 text-[11px] font-semibold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-lg">
@@ -152,7 +198,14 @@ export const OverviewPage: React.FC = () => {
         >
           <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={mockFamiliesServedSeries} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+              <AreaChart
+                data={mockFamiliesServedSeries.map(d => ({
+                  ...d,
+                  value: Math.round(d.value * combinedMultiplier),
+                  previousValue: d.previousValue ? Math.round(d.previousValue * combinedMultiplier) : undefined,
+                }))}
+                margin={{ top: 5, right: 10, left: -10, bottom: 0 }}
+              >
                 <defs>
                   <linearGradient id="familiesGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
@@ -211,10 +264,6 @@ export const OverviewPage: React.FC = () => {
         <ChartCard
           title="Distribution by Type"
           subtitle="Pantry distribution methods"
-          dataTable={{
-            columns: ['Distribution method', 'Share of pantries (%)'],
-            rows: mockDistributionByType.map((entry) => [entry.category, entry.value]),
-          }}
         >
           <div className="h-[280px] flex flex-col items-center justify-center">
             <ResponsiveContainer width="100%" height={180}>
@@ -263,14 +312,14 @@ export const OverviewPage: React.FC = () => {
           title="Items Distributed by Category"
           subtitle="Total volume breakdown"
           className="lg:col-span-2"
-          dataTable={{
-            columns: ['Category', 'Items distributed'],
-            rows: mockCategoryBreakdown.map((entry) => [entry.category, entry.value]),
-          }}
         >
           <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={mockCategoryBreakdown} margin={{ top: 5, right: 10, left: -10, bottom: 0 }} layout="vertical">
+              <BarChart
+                data={mockCategoryBreakdown.map(c => ({ ...c, value: Math.round(c.value * combinedMultiplier) }))}
+                margin={{ top: 5, right: 10, left: -10, bottom: 0 }}
+                layout="vertical"
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal={false} />
                 <XAxis
                   type="number"
@@ -300,17 +349,8 @@ export const OverviewPage: React.FC = () => {
 
         {/* Top Pantries Table */}
         <ChartCard
-          title="Top Pantries"
-          subtitle="By total visits this period"
-          dataTable={{
-            columns: ['Pantry', 'County', 'Total visits', 'Growth rate (%)'],
-            rows: topPantries.map((pantry) => [
-              pantry.name,
-              pantry.county,
-              pantry.totalVisits,
-              pantry.growthRate,
-            ]),
-          }}
+          title={`Top Pantries in Scope (${countyScope === 'all' ? 'All Counties' : countyScope})`}
+          subtitle={`Showing ${topPantries.length} pantries`}
           action={
             <button
               onClick={handleExportTopPantriesCSV}
@@ -321,29 +361,33 @@ export const OverviewPage: React.FC = () => {
           }
         >
           <div className="space-y-3">
-            {topPantries.map((pantry, idx) => (
-              <div
-                key={pantry.id}
-                className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.04] transition-colors"
-              >
-                <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center text-[12px] font-bold text-slate-400 shrink-0">
-                  {idx + 1}
+            {topPantries.length > 0 ? (
+              topPantries.map((pantry, idx) => (
+                <div
+                  key={pantry.id}
+                  className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.04] transition-colors"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center text-[12px] font-bold text-slate-400 shrink-0">
+                    {idx + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium text-white truncate">{pantry.name}</p>
+                    <p className="text-[11px] text-slate-500">{pantry.county} County</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[13px] font-semibold text-white">{pantry.totalVisits.toLocaleString()}</p>
+                    <p className={`text-[11px] font-medium flex items-center gap-0.5 justify-end ${
+                      pantry.growthRate > 0 ? 'text-emerald-400' : 'text-red-400'
+                    }`}>
+                      <TrendingUp className="w-3 h-3" />
+                      {pantry.growthRate > 0 ? '+' : ''}{pantry.growthRate}%
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-white truncate">{pantry.name}</p>
-                  <p className="text-[11px] text-slate-400">{pantry.county} County</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-[13px] font-semibold text-white">{pantry.totalVisits.toLocaleString()}</p>
-                  <p className={`text-[11px] font-medium flex items-center gap-0.5 justify-end ${
-                    pantry.growthRate > 0 ? 'text-emerald-400' : 'text-red-400'
-                  }`}>
-                    <TrendingUp className="w-3 h-3" />
-                    {pantry.growthRate > 0 ? '+' : ''}{pantry.growthRate}%
-                  </p>
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-[12px] text-slate-500 py-4 text-center">No active pantries in {countyScope} County.</p>
+            )}
           </div>
         </ChartCard>
       </div>

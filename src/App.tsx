@@ -1,85 +1,61 @@
-import { lazy } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { AuthProvider } from './context/AuthProvider';
-import { DashboardFilterProvider } from './context/DashboardFilterProvider';
-import { RequireAuth } from './components/routing/RequireAuth';
+import { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from './components/layout/DashboardLayout';
+import { DashboardFilterProvider } from './context/DashboardFilterProvider';
 import { LoginPage } from './pages/LoginPage';
-import { useAuth } from './hooks/useAuth';
+import { OverviewPage } from './pages/OverviewPage';
+import { DemographicsPage } from './pages/DemographicsPage';
+import { FoodDesertsPage } from './pages/FoodDesertsPage';
+import { PantryInteractionsPage } from './pages/PantryInteractionsPage';
+import { MostRequestedPage } from './pages/MostRequestedPage';
+import { ReportsPage } from './pages/ReportsPage';
+import { BillingPage } from './pages/BillingPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { mockCurrentUser } from './data/mockData';
+import type { AgencyUser } from './types';
 
-// Pages load on demand so Recharts and the county geometry stay out of the
-// bundle an unauthenticated visitor downloads. They use named exports, hence
-// the `.then` shim. LoginPage stays eager — it is the first paint.
-const OverviewPage = lazy(() => import('./pages/OverviewPage').then((m) => ({ default: m.OverviewPage })));
-const DemographicsPage = lazy(() =>
-  import('./pages/DemographicsPage').then((m) => ({ default: m.DemographicsPage })),
-);
-const FoodDesertsPage = lazy(() =>
-  import('./pages/FoodDesertsPage').then((m) => ({ default: m.FoodDesertsPage })),
-);
-const PantryInteractionsPage = lazy(() =>
-  import('./pages/PantryInteractionsPage').then((m) => ({ default: m.PantryInteractionsPage })),
-);
-const MostRequestedPage = lazy(() =>
-  import('./pages/MostRequestedPage').then((m) => ({ default: m.MostRequestedPage })),
-);
-const ReportsPage = lazy(() => import('./pages/ReportsPage').then((m) => ({ default: m.ReportsPage })));
-const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+function AppContent() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<AgencyUser>(mockCurrentUser);
+  const navigate = useNavigate();
 
-interface AttemptedLocation {
-  pathname: string;
-  search?: string;
-  hash?: string;
-}
+  const handleLogin = (email: string) => {
+    setIsAuthenticated(true);
+    setUser((prev) => ({ ...prev, email }));
+    navigate('/');
+  };
 
-function LoginRoute() {
-  const { status, signIn } = useAuth();
-  const location = useLocation();
+  const handleSignOut = () => {
+    setIsAuthenticated(false);
+  };
 
-  if (status === 'authenticated') {
-    const from = (location.state as { from?: AttemptedLocation } | null)?.from;
-    // Carry the query string and hash back too — they hold the filter state,
-    // so dropping them would land the user on an unfiltered view.
-    const target = from ? `${from.pathname}${from.search ?? ''}${from.hash ?? ''}` : '/';
-    return <Navigate to={target} replace />;
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={handleLogin} />;
   }
 
-  return <LoginPage onLogin={signIn} />;
-}
-
-/**
- * Everything behind the login. Nesting the pages under a layout route means
- * the layout renders them through an <Outlet />, so shared state travels by
- * context rather than by cloning props onto <Routes>.
- */
-function ProtectedShell() {
   return (
-    <RequireAuth>
-      <DashboardFilterProvider>
-        <DashboardLayout />
-      </DashboardFilterProvider>
-    </RequireAuth>
+    <DashboardFilterProvider>
+      <DashboardLayout user={user} onSignOut={handleSignOut}>
+        <Routes>
+          <Route path="/" element={<OverviewPage />} />
+          <Route path="/demographics" element={<DemographicsPage />} />
+          <Route path="/food-deserts" element={<FoodDesertsPage />} />
+          <Route path="/interactions" element={<PantryInteractionsPage />} />
+          <Route path="/most-requested" element={<MostRequestedPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/billing" element={<BillingPage user={user} />} />
+          <Route path="/settings" element={<SettingsPage user={user} />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </DashboardLayout>
+    </DashboardFilterProvider>
   );
 }
 
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<LoginRoute />} />
-          <Route element={<ProtectedShell />}>
-            <Route path="/" element={<OverviewPage />} />
-            <Route path="/demographics" element={<DemographicsPage />} />
-            <Route path="/food-deserts" element={<FoodDesertsPage />} />
-            <Route path="/interactions" element={<PantryInteractionsPage />} />
-            <Route path="/most-requested" element={<MostRequestedPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        </Routes>
-      </AuthProvider>
+      <AppContent />
     </BrowserRouter>
   );
 }

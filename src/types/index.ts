@@ -3,6 +3,7 @@
 // ============================================
 
 export type UserRole = 'Executive Director' | 'Regional Coordinator' | 'Data Analyst' | 'Field Inspector';
+export type SubscriptionTier = 'community' | 'pro' | 'enterprise';
 
 export interface AgencyUser {
   id: string;
@@ -10,6 +11,7 @@ export interface AgencyUser {
   email: string;
   organization: string;
   role: UserRole;
+  subscriptionTier?: SubscriptionTier;
   avatarUrl?: string;
   region: string;
   assignedCounties: string[];
@@ -115,6 +117,7 @@ export interface ReportTemplate {
   category: 'Monthly' | 'Quarterly' | 'Custom';
   icon: string;
   lastGenerated?: string;
+  isProOnly?: boolean;
 }
 
 export interface GeneratedReport {
@@ -151,6 +154,26 @@ export interface ThresholdAlert {
   lastTriggered?: string;
 }
 
+export type ReportFrequency = 'weekly' | 'monthly' | 'quarterly';
+export type ReportFormat = 'csv' | 'pdf';
+
+export interface ScheduledReport {
+  id: string;
+  templateId: string;
+  templateName: string;
+  frequency: ReportFrequency;
+  format: ReportFormat;
+  sendOnDay: number;
+  recipients: string[];
+  countyScope: string;
+  isActive: boolean;
+  createdBy: string;
+  createdAt: string;
+  nextRunAt: string;
+  lastRunAt?: string;
+}
+
+export type DemographicSegment = 'all' | 'children' | 'seniors' | 'first-time' | 'emergency';
 export type DateRangePreset = '7d' | '30d' | '90d' | 'ytd' | 'custom';
 
 export interface CustomDateRange {

@@ -1,14 +1,27 @@
 import React, { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { CustomDateRange, DateRangePreset } from '../types';
+import type { CustomDateRange, DateRangePreset, DemographicSegment } from '../types';
 import { resolveDateRange, toISODate } from '../utils/dateRange';
+import { ALL_COUNTIES, DEMOGRAPHIC_SEGMENTS } from '../utils/scoping';
 import { DashboardFilterContext, type DashboardFilterValue } from './DashboardFilterContext';
 
 const PRESETS: DateRangePreset[] = ['7d', '30d', '90d', 'ytd', 'custom'];
+const SEGMENTS = DEMOGRAPHIC_SEGMENTS.map((entry) => entry.value);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** Guards against an arbitrary query value being echoed into the UI. */
+const COUNTY_NAME = /^[A-Za-z .'-]{2,40}$/;
 
 function parsePreset(raw: string | null): DateRangePreset {
   return PRESETS.includes(raw as DateRangePreset) ? (raw as DateRangePreset) : '30d';
+}
+
+function parseSegment(raw: string | null): DemographicSegment {
+  return SEGMENTS.includes(raw as DemographicSegment) ? (raw as DemographicSegment) : 'all';
+}
+
+function parseCountyScope(raw: string | null): string {
+  if (!raw || raw === ALL_COUNTIES) return ALL_COUNTIES;
+  return COUNTY_NAME.test(raw) ? raw : ALL_COUNTIES;
 }
 
 function parseCustomRange(from: string | null, to: string | null): CustomDateRange | null {
@@ -38,6 +51,8 @@ export const DashboardFilterProvider: React.FC<DashboardFilterProviderProps> = (
   const toParam = searchParams.get('to');
   const compareParam = searchParams.get('compare');
   const countyParam = searchParams.get('county');
+  const scopeParam = searchParams.get('scope');
+  const segmentParam = searchParams.get('segment');
 
   // Reduce the clock to a date string so the memo below does not invalidate on
   // every render just because `new Date()` produced a new object.
@@ -86,6 +101,26 @@ export const DashboardFilterProvider: React.FC<DashboardFilterProviderProps> = (
     [update],
   );
 
+  const setCountyScope = useCallback(
+    (county: string) => {
+      update((params) => {
+        if (county === ALL_COUNTIES) params.delete('scope');
+        else params.set('scope', county);
+      });
+    },
+    [update],
+  );
+
+  const setDemographicSegment = useCallback(
+    (segment: DemographicSegment) => {
+      update((params) => {
+        if (segment === 'all') params.delete('segment');
+        else params.set('segment', segment);
+      });
+    },
+    [update],
+  );
+
   const setSelectedCountyId = useCallback(
     (countyId: string | null) => {
       update((params) => {
@@ -106,10 +141,14 @@ export const DashboardFilterProvider: React.FC<DashboardFilterProviderProps> = (
       dateRange,
       customRange,
       compareMode: compareParam === '1',
+      countyScope: parseCountyScope(scopeParam),
+      demographicSegment: parseSegment(segmentParam),
       selectedCountyId: countyParam,
       resolved: resolveDateRange(dateRange, customRange, new Date(`${todayISO}T00:00:00.000Z`)),
       setDateRange,
       setCompareMode,
+      setCountyScope,
+      setDemographicSegment,
       setSelectedCountyId,
     };
   }, [
@@ -118,9 +157,13 @@ export const DashboardFilterProvider: React.FC<DashboardFilterProviderProps> = (
     toParam,
     compareParam,
     countyParam,
+    scopeParam,
+    segmentParam,
     todayISO,
     setDateRange,
     setCompareMode,
+    setCountyScope,
+    setDemographicSegment,
     setSelectedCountyId,
   ]);
 

@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Search, Filter, ZoomIn, ZoomOut, RotateCcw, ShoppingBag } from 'lucide-react';
 import {
-  alabamaCounties,
+  alabamaCounties as staticCounties,
   getCountyColor,
   getStatusFromScore,
   type AlabamaCountyData,
@@ -14,6 +14,8 @@ import {
 } from '../../data/alabamaGeometry';
 
 interface AlabamaHeatMapProps {
+  /** Live county metrics. Falls back to the bundled dataset when omitted. */
+  counties?: AlabamaCountyData[];
   selectedCountyId?: string | null;
   onSelectCounty?: (county: AlabamaCountyData) => void;
 }
@@ -123,7 +125,14 @@ function findNeighbour(
   return best;
 }
 
-export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({ selectedCountyId, onSelectCounty }) => {
+export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({
+  counties,
+  selectedCountyId,
+  onSelectCounty,
+}) => {
+  // Never render an empty map: an in-flight subscription should still show the
+  // state, just with the bundled figures until live ones arrive.
+  const alabamaCounties = counties && counties.length > 0 ? counties : staticCounties;
   const [hoveredCountyId, setHoveredCountyId] = useState<string | null>(null);
   const [focusedCountyId, setFocusedCountyId] = useState<string | null>(null);
   const [regionFilter, setRegionFilter] = useState<RegionFilter>('all');
@@ -150,7 +159,7 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({ selectedCountyId
       if (regionFilter === 'critical') return county.foodAccessScore < 25;
       return true;
     });
-  }, [searchTerm, regionFilter]);
+  }, [alabamaCounties, searchTerm, regionFilter]);
 
   const matchingIds = useMemo(() => new Set(matchingCounties.map((county) => county.id)), [matchingCounties]);
 
@@ -166,6 +175,7 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({ selectedCountyId
 
   const activeCounty =
     alabamaCounties.find((county) => county.id === (hoveredCountyId ?? focusedCountyId)) ?? null;
+
 
   const focusCounty = useCallback((county: AlabamaCountyData) => {
     setFocusedCountyId(county.id);
@@ -226,7 +236,7 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({ selectedCountyId
     const y = Math.min(Math.max(centreY - height / 2, 0), ALABAMA_VIEW_HEIGHT - height);
 
     return `${x} ${y} ${width} ${height}`;
-  }, [zoom, selectedCountyId]);
+  }, [zoom, selectedCountyId, alabamaCounties]);
 
   // Anchor the tooltip to the county's centroid expressed as a percentage of
   // the visible viewBox, so it tracks correctly at every zoom level and works

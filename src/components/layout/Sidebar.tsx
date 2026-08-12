@@ -8,6 +8,7 @@ import {
   ShoppingBasket,
   FileBarChart2,
   Settings,
+  CreditCard,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -44,6 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const settingsNav = [
+    { label: 'Billing & Subscription', path: '/billing', icon: CreditCard },
     { label: 'Settings', path: '/settings', icon: Settings },
   ];
 

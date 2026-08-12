@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { Building2, Mail, MapPin, Bell, Key, Shield, Plus, Trash2, CheckCircle, Database } from 'lucide-react';
 import { ChartCard } from '../components/ui/ChartCard';
+import type { AgencyUser } from '../types';
 import { mockThresholdAlerts } from '../data/mockData';
-import { useAuth } from '../hooks/useAuth';
+import { getFirebaseStatus } from '../services/firebase';
 
-export const SettingsPage: React.FC = () => {
-  const { user } = useAuth();
+interface SettingsPageProps {
+  user: AgencyUser;
+}
+
+export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   const [alerts, setAlerts] = useState(mockThresholdAlerts);
   const [showAddAlert, setShowAddAlert] = useState(false);
   const [newCounty, setNewCounty] = useState('Lowndes County');
@@ -13,9 +17,7 @@ export const SettingsPage: React.FC = () => {
   const [newThreshold, setNewThreshold] = useState(25);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // RequireAuth guarantees a user before this renders; this satisfies the
-  // type checker without a non-null assertion.
-  if (!user) return null;
+  const firebaseStatus = getFirebaseStatus();
 
   const handleAddAlert = (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,12 +193,11 @@ export const SettingsPage: React.FC = () => {
                   </span>
                 )}
                 <button
-                  type="button"
                   onClick={() => handleDeleteAlert(alert.id)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-white/[0.06] transition-colors cursor-pointer"
-                  aria-label={`Delete the ${alert.metric} alert for ${alert.countyOrPantry}`}
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-white/[0.06] transition-colors cursor-pointer"
+                  title="Delete alert"
                 >
-                  <Trash2 className="w-4 h-4" aria-hidden="true" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -214,16 +215,18 @@ export const SettingsPage: React.FC = () => {
               </div>
               <div>
                 <p className="text-[13px] font-bold text-white">Firebase Firestore / Realtime DB Ready</p>
-                <p className="text-[12px] text-slate-400">Ready to accept live stream metrics when backend is connected</p>
+                <p className="text-[12px] text-slate-400">Current Mode: {firebaseStatus.mode}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse-glow" />
-              <span className="text-[12px] text-emerald-400 font-semibold">Config Scaffolding Complete</span>
+              <span className="text-[12px] text-emerald-400 font-semibold">
+                {firebaseStatus.isConnected ? 'Connected to Firestore' : 'Mock Stream Ready'}
+              </span>
             </div>
           </div>
 
-          {/* API Key */}
+          {/* API Key Config */}
           <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.04]">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">

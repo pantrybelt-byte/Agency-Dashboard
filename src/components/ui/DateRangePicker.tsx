@@ -5,7 +5,7 @@ import { Modal } from './Modal';
 
 interface DateRangePickerProps {
   selected: DateRangePreset;
-  customRange: CustomDateRange | null;
+  customRange?: CustomDateRange;
   onChange: (preset: DateRangePreset, custom?: CustomDateRange) => void;
   compareMode: boolean;
   onToggleCompare: (enabled: boolean) => void;

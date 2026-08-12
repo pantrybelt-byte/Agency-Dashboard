@@ -1,23 +1,32 @@
 import React, { useState } from 'react';
-import { Bell, Menu, ChevronDown, User, Settings, LogOut, RefreshCw, Share2, Check } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Bell, Menu, ChevronDown, User, Settings, LogOut, RefreshCw, Share2, Check, MapPin } from 'lucide-react';
+import type { AgencyUser } from '../../types';
 import { DateRangePicker } from '../ui/DateRangePicker';
-import { Menu as MenuPopover, MenuItem } from '../ui/Menu';
-import { useAuth } from '../../hooks/useAuth';
+import { checkFirebaseConnectionStatus } from '../../services/firebase';
 import { useDashboardFilters } from '../../hooks/useDashboardFilters';
 
 interface HeaderProps {
   pageTitle: string;
   pageSubtitle?: string;
+  user: AgencyUser;
+  onSignOut: () => void;
   onToggleSidebar: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggleSidebar }) => {
-  const { user, signOut } = useAuth();
-  const { dateRange, customRange, compareMode, setDateRange, setCompareMode } = useDashboardFilters();
-  const navigate = useNavigate();
+export const Header: React.FC<HeaderProps> = ({
+  pageTitle,
+  pageSubtitle,
+  user,
+  onSignOut,
+  onToggleSidebar,
+}) => {
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const connectionStatus = checkFirebaseConnectionStatus();
+
+  // Connect directly to Global URL Query Filter State
+  const filters = useDashboardFilters();
 
   const handleManualSync = () => {
     setIsRefreshing(true);
@@ -26,177 +35,153 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggl
     }, 1200);
   };
 
-  const handleShareView = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2500);
-    } catch {
-      // Clipboard access is denied outside secure contexts. Failing quietly
-      // beats showing a "Copied!" confirmation for something that never copied.
-    }
+  const handleShareView = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
   };
 
-  if (!user) return null;
-
   return (
-    <header className="sticky top-0 z-30 bg-[#0f1117]/80 backdrop-blur-xl border-b border-white/[0.06]">
-      <div className="flex items-center justify-between px-5 sm:px-8 py-4 gap-3">
-        {/* Left: Mobile menu + Page title */}
-        <div className="flex items-center gap-3 min-w-0">
+    <header className="sticky top-0 z-30 bg-[#0f1117]/85 backdrop-blur-xl border-b border-white/[0.06]">
+      <div className="flex items-center justify-between px-5 sm:px-8 py-3.5">
+        {/* Left: Mobile menu + Page title + Live sync */}
+        <div className="flex items-center gap-3">
           <button
-            type="button"
             onClick={onToggleSidebar}
-            className="lg:hidden p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
-            aria-label="Open navigation sidebar"
+            className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+            aria-label="Open sidebar"
           >
-            <Menu className="w-5 h-5" aria-hidden="true" />
+            <Menu className="w-5 h-5" />
           </button>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-white tracking-tight truncate">{pageTitle}</h1>
+
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg font-bold text-white tracking-tight">{pageTitle}</h1>
+
+              {/* Live Sync Status Pill */}
               <button
-                type="button"
                 onClick={handleManualSync}
-                className="hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-500/20 transition-all text-[10px] font-semibold cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
-                aria-label="Refresh dashboard data"
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all text-[10px] font-semibold cursor-pointer"
+                title={`Data Source: ${connectionStatus.mode}. Click to test sync.`}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-glow" aria-hidden="true" />
-                <span>Live Sync</span>
-                <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
-                <span className="sr-only" role="status">
-                  {isRefreshing ? 'Refreshing' : ''}
-                </span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-glow" />
+                <span>{connectionStatus.mode}</span>
+                <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
               </button>
             </div>
-            {pageSubtitle && <p className="text-[12px] text-slate-300 mt-0.5 truncate">{pageSubtitle}</p>}
+            {pageSubtitle && (
+              <p className="text-[12px] text-slate-400 mt-0.5">{pageSubtitle}</p>
+            )}
           </div>
         </div>
 
-        {/* Right: Date range + Share + Notifications + User */}
-        <div className="flex items-center gap-3 shrink-0">
+        {/* Right: County Scope Dropdown + Date range + Share + Notifications + User */}
+        <div className="flex items-center gap-3">
+          {/* County Scope Dropdown Selector (Connected to URL Context) */}
+          <div className="hidden lg:flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-1.5">
+            <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="text-[11px] text-slate-400 font-medium">Scope:</span>
+            <select
+              value={filters.countyScope}
+              onChange={(e) => filters.setCountyScope(e.target.value)}
+              className="bg-transparent text-[12px] font-semibold text-white focus:outline-none cursor-pointer"
+            >
+              <option value="all" className="bg-[#1a1d2e] text-white">All River Region (6 Counties)</option>
+              <option value="Montgomery" className="bg-[#1a1d2e] text-white">Montgomery County</option>
+              <option value="Autauga" className="bg-[#1a1d2e] text-white">Autauga County</option>
+              <option value="Elmore" className="bg-[#1a1d2e] text-white">Elmore County</option>
+              <option value="Lowndes" className="bg-[#1a1d2e] text-white">Lowndes County</option>
+              <option value="Macon" className="bg-[#1a1d2e] text-white">Macon County</option>
+              <option value="Dallas" className="bg-[#1a1d2e] text-white">Dallas County</option>
+            </select>
+          </div>
+
           <div className="hidden sm:block">
             <DateRangePicker
-              selected={dateRange}
-              customRange={customRange}
-              onChange={setDateRange}
-              compareMode={compareMode}
-              onToggleCompare={setCompareMode}
+              selected={filters.dateRange}
+              onChange={(preset) => filters.setDateRange(preset)}
+              compareMode={filters.compareMode}
+              onToggleCompare={(enabled) => filters.setCompareMode(enabled)}
             />
           </div>
 
+          {/* Share View Button */}
           <button
-            type="button"
             onClick={handleShareView}
-            className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-slate-200 hover:text-white hover:bg-white/[0.08] transition-all text-[12px] font-medium cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
-            aria-label="Copy a link to this view, including the current filters"
+            className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-slate-300 hover:text-white hover:bg-white/[0.08] transition-all text-[12px] font-medium cursor-pointer"
+            title="Copy shareable link with current filters"
           >
-            {copiedLink ? (
-              <Check className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
-            ) : (
-              <Share2 className="w-3.5 h-3.5" aria-hidden="true" />
-            )}
+            {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
             <span>{copiedLink ? 'Copied!' : 'Share'}</span>
           </button>
-          <span aria-live="polite" className="sr-only">
-            {copiedLink ? 'Link copied to clipboard' : ''}
-          </span>
 
+          {/* Notification Bell */}
           <button
-            type="button"
-            className="relative p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
-            aria-label="Notifications, 1 unread"
+            className="relative p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+            aria-label="Notifications"
           >
-            <Bell className="w-5 h-5" aria-hidden="true" />
-            <span
-              className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse-glow"
-              aria-hidden="true"
-            />
+            <Bell className="w-5 h-5" />
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse-glow" />
           </button>
 
-          <MenuPopover
-            label={`Account menu for ${user.name}`}
-            triggerClassName="flex items-center gap-2 py-1.5 px-2 rounded-xl hover:bg-white/[0.06] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
-            menuClassName="w-64"
-            trigger={
+          {/* User Menu */}
+          <div className="relative">
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="flex items-center gap-2 py-1.5 px-2 rounded-xl hover:bg-white/[0.04] transition-colors cursor-pointer"
+              aria-expanded={showUserMenu}
+              aria-label="User account menu"
+            >
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-[12px] font-bold shadow-lg shadow-indigo-500/20">
+                {user.name.split(' ').map(n => n[0]).join('')}
+              </div>
+              <div className="hidden md:block text-left">
+                <p className="text-[13px] font-medium text-white leading-tight">{user.name}</p>
+                <p className="text-[10px] text-slate-500">{user.organization}</p>
+              </div>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-500 hidden md:block" />
+            </button>
+
+            {showUserMenu && (
               <>
-                <span
-                  className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-[12px] font-bold shadow-lg shadow-indigo-500/20"
-                  aria-hidden="true"
-                >
-                  {user.name
-                    .split(' ')
-                    .map((part) => part[0])
-                    .join('')}
-                </span>
-                <span className="hidden md:block text-left">
-                  <span className="block text-[13px] font-medium text-white leading-tight">{user.name}</span>
-                  <span className="block text-[10px] text-slate-400">{user.organization}</span>
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden md:block" aria-hidden="true" />
-              </>
-            }
-          >
-            {(close) => (
-              <>
-                <div className="p-3.5 border-b border-white/[0.08] bg-white/[0.02]">
-                  <p className="text-[13px] font-semibold text-white">{user.name}</p>
-                  <p className="text-[11px] text-slate-300">{user.email}</p>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
-                      {user.role}
-                    </span>
-                    <span className="text-[10px] text-slate-400">
-                      {user.assignedCounties.length} counties
-                    </span>
+                <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                <div className="absolute right-0 top-full mt-2 w-64 bg-[#1a1d2e] border border-white/[0.08] rounded-xl shadow-xl z-50 overflow-hidden">
+                  <div className="p-3.5 border-b border-white/[0.06] bg-white/[0.02]">
+                    <p className="text-[13px] font-semibold text-white">{user.name}</p>
+                    <p className="text-[11px] text-slate-400">{user.email}</p>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                        {user.role}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        {user.assignedCounties.length} Counties
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div className="py-1">
-                  <MenuItem
-                    icon={<User className="w-4 h-4 text-slate-400" aria-hidden="true" />}
-                    onSelect={() => {
-                      close(false);
-                      navigate('/settings');
-                    }}
-                  >
-                    Profile &amp; permissions
-                  </MenuItem>
-                  <MenuItem
-                    icon={<Settings className="w-4 h-4 text-slate-400" aria-hidden="true" />}
-                    onSelect={() => {
-                      close(false);
-                      navigate('/settings');
-                    }}
-                  >
-                    Agency settings
-                  </MenuItem>
-                </div>
-                <div className="py-1 border-t border-white/[0.08]">
-                  <MenuItem
-                    variant="danger"
-                    icon={<LogOut className="w-4 h-4" aria-hidden="true" />}
-                    onSelect={signOut}
-                  >
-                    Sign out
-                  </MenuItem>
+                  <div className="py-1">
+                    <button className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-slate-300 hover:bg-white/[0.04] transition-colors cursor-pointer">
+                      <User className="w-4 h-4 text-slate-400" />
+                      Profile & Permissions
+                    </button>
+                    <button className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-slate-300 hover:bg-white/[0.04] transition-colors cursor-pointer">
+                      <Settings className="w-4 h-4 text-slate-400" />
+                      Agency Settings
+                    </button>
+                  </div>
+                  <div className="py-1 border-t border-white/[0.06]">
+                    <button
+                      onClick={onSignOut}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sign out
+                    </button>
+                  </div>
                 </div>
               </>
             )}
-          </MenuPopover>
+          </div>
         </div>
-      </div>
-
-      {/* On narrow screens the date controls get their own scrollable row —
-          previously they were hidden entirely, so mobile users could not
-          change the date range at all. */}
-      <div className="sm:hidden px-5 pb-3 overflow-x-auto">
-        <DateRangePicker
-          selected={dateRange}
-          customRange={customRange}
-          onChange={setDateRange}
-          compareMode={compareMode}
-          onToggleCompare={setCompareMode}
-        />
       </div>
     </header>
   );

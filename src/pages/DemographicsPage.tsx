@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts';
@@ -6,7 +6,18 @@ import { Users, Download, UserCheck, Heart, ShieldCheck, MapPin } from 'lucide-r
 import { MetricCard } from '../components/ui/MetricCard';
 import { ChartCard } from '../components/ui/ChartCard';
 import { DataTable } from '../components/ui/DataTable';
-import { mockDemographics } from '../data/mockData';
+import { SegmentFilter } from '../components/ui/SegmentFilter';
+import { mockDemographics, mockCurrentUser } from '../data/mockData';
+import { useDashboardFilters } from '../hooks/useDashboardFilters';
+import { useAuth } from '../hooks/useAuth';
+import {
+  ALL_COUNTIES,
+  AGE_GROUP_FOR_SEGMENT,
+  VISITOR_TYPE_FOR_SEGMENT,
+  resolveVisibleCounties,
+  segmentLabel,
+  segmentShare,
+} from '../utils/scoping';
 import { exportToCSV } from '../utils/csvExport';
 import {
   AGE_GROUP_CHILDREN,
@@ -16,6 +27,11 @@ import {
   countByAgeGroup,
   countByVisitorType,
 } from '../utils/demographics';
+import type { DemographicSegment } from '../types';
+
+interface DemographicsPageProps {
+  countyScope?: string;
+}
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string; color: string }>; label?: string }) => {
   if (!active || !payload) return null;
@@ -31,18 +47,55 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   );
 };
 
-export const DemographicsPage: React.FC = () => {
+export const DemographicsPage: React.FC<DemographicsPageProps> = ({ countyScope: propCountyScope }) => {
   const demographics = mockDemographics;
+  const filters = useDashboardFilters();
+  const auth = useAuth();
+  
+  const [localSegment, setLocalSegment] = useState<DemographicSegment>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Derived from the dataset rather than hardcoded, so these move with the
-  // data once Firebase supplies it.
+  const countyScope = propCountyScope || filters.countyScope || ALL_COUNTIES;
+  const demographicSegment = filters.demographicSegment !== 'all' ? filters.demographicSegment : localSegment;
+  const handleSegmentChange = (seg: DemographicSegment) => {
+    setLocalSegment(seg);
+    if (filters.setDemographicSegment) {
+      filters.setDemographicSegment(seg);
+    }
+  };
+
+  const user = auth.user || mockCurrentUser;
+
+  const visibleCounties = useMemo(
+    () => resolveVisibleCounties(user?.assignedCounties ?? ['Montgomery', 'Autauga', 'Elmore', 'Lowndes', 'Macon', 'Dallas'], countyScope),
+    [user, countyScope],
+  );
+
+  const segmentFraction = useMemo(
+    () => segmentShare(demographics, demographicSegment),
+    [demographics, demographicSegment],
+  );
+
+  const highlightedAgeGroup = AGE_GROUP_FOR_SEGMENT[demographicSegment];
+  const highlightedVisitorType = VISITOR_TYPE_FOR_SEGMENT[demographicSegment];
+
+  const scopedZipCodes = useMemo(
+    () =>
+      demographics.zipCodeBreakdown
+        .filter((item) => visibleCounties.length === 0 || visibleCounties.includes(item.county))
+        .map((item) => ({
+          ...item,
+          familiesServed: Math.round(item.familiesServed * segmentFraction),
+        })),
+    [demographics.zipCodeBreakdown, visibleCounties, segmentFraction],
+  );
+
   const childrenServed = countByAgeGroup(demographics, AGE_GROUP_CHILDREN);
   const seniorsServed = countByAgeGroup(demographics, AGE_GROUP_SENIORS);
   const firstTimeRecipients = countByVisitorType(demographics, VISITOR_TYPE_FIRST_TIME);
   const avgHouseholdSize = averageHouseholdSize(demographics);
 
-  const filteredZipCodes = demographics.zipCodeBreakdown.filter(
+  const filteredZipCodes = scopedZipCodes.filter(
     (item) =>
       item.zip.includes(searchTerm) ||
       item.community.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -50,7 +103,7 @@ export const DemographicsPage: React.FC = () => {
   );
 
   const handleExportZipCSV = () => {
-    exportToCSV('Demographics_ZIP_Breakdown', demographics.zipCodeBreakdown, [
+    exportToCSV('Demographics_ZIP_Breakdown', scopedZipCodes, [
       { key: 'zip', label: 'ZIP Code' },
       { key: 'community', label: 'Community / Neighborhood' },
       { key: 'county', label: 'County' },
@@ -69,8 +122,10 @@ export const DemographicsPage: React.FC = () => {
           </div>
           <div>
             <p className="text-[13px] font-bold text-white">United Way & USDA Grant Reporting Standard</p>
-            <p className="text-[12px] text-slate-400">
-              Community demographics, household composition, visitor frequency, and census ZIP metrics.
+            <p className="text-[12px] text-slate-300">
+              Community demographics, household composition, visitor frequency, and census ZIP metrics
+              {countyScope !== ALL_COUNTIES && ` for ${countyScope} County`}
+              {demographicSegment !== 'all' && ` · ${segmentLabel(demographicSegment)}`}.
             </p>
           </div>
         </div>
@@ -83,11 +138,13 @@ export const DemographicsPage: React.FC = () => {
         </button>
       </div>
 
+      <SegmentFilter value={demographicSegment} onChange={handleSegmentChange} />
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           label="Children Impacted (0–17)"
-          value={childrenServed}
+          value={Math.round(childrenServed * (demographicSegment === 'children' ? 1.0 : segmentFraction))}
           trend={15.4}
           trendLabel="vs last period"
           icon={<Heart className="w-5 h-5 text-indigo-400" />}
@@ -95,7 +152,7 @@ export const DemographicsPage: React.FC = () => {
         />
         <MetricCard
           label="Seniors Served (60+)"
-          value={seniorsServed}
+          value={Math.round(seniorsServed * (demographicSegment === 'seniors' ? 1.0 : segmentFraction))}
           trend={18.2}
           trendLabel="vs last period"
           icon={<Users className="w-5 h-5 text-emerald-400" />}
@@ -104,7 +161,7 @@ export const DemographicsPage: React.FC = () => {
         />
         <MetricCard
           label="First-Time Recipients"
-          value={firstTimeRecipients}
+          value={Math.round(firstTimeRecipients * (demographicSegment === 'first-time' ? 1.0 : segmentFraction))}
           trend={22.0}
           trendLabel="vs last period"
           icon={<UserCheck className="w-5 h-5 text-blue-400" />}
@@ -145,7 +202,14 @@ export const DemographicsPage: React.FC = () => {
                   nameKey="group"
                 >
                   {demographics.ageGroups.map((entry, index) => (
-                    <Cell key={index} fill={entry.color} stroke="transparent" />
+                    <Cell
+                      key={index}
+                      fill={entry.color}
+                      stroke="transparent"
+                      fillOpacity={
+                        highlightedAgeGroup && entry.group !== highlightedAgeGroup ? 0.3 : 1
+                      }
+                    />
                   ))}
                 </Pie>
                 <Tooltip formatter={(value) => [Number(value).toLocaleString(), 'Individuals']} />
@@ -185,7 +249,14 @@ export const DemographicsPage: React.FC = () => {
                   nameKey="type"
                 >
                   {demographics.visitorTypes.map((entry, index) => (
-                    <Cell key={index} fill={entry.color} stroke="transparent" />
+                    <Cell
+                      key={index}
+                      fill={entry.color}
+                      stroke="transparent"
+                      fillOpacity={
+                        highlightedVisitorType && entry.type !== highlightedVisitorType ? 0.3 : 1
+                      }
+                    />
                   ))}
                 </Pie>
                 <Tooltip formatter={(value) => [Number(value).toLocaleString(), 'Families']} />
@@ -257,7 +328,11 @@ export const DemographicsPage: React.FC = () => {
         {/* Community ZIP Code Breakdown Table */}
         <ChartCard
           title="Community ZIP Code Coverage"
-          subtitle="Top zip codes in River Region"
+          subtitle={
+            countyScope === ALL_COUNTIES
+              ? `ZIP codes across assigned counties`
+              : `ZIP codes in ${countyScope} County`
+          }
           className="lg:col-span-2"
           action={
             <div className="flex items-center gap-2">

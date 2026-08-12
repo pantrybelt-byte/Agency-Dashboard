@@ -103,6 +103,18 @@ function main(): void {
 
   const outlinePath = roundPath(pathBuilder(stateOutline) ?? '');
 
+  // Emit the fitted projection so the client can place live lat/lng markers in
+  // exactly this coordinate space. Rebuilding the projection from these values
+  // is what guarantees a pantry pin lands inside the right county polygon.
+  const [translateX, translateY] = projection.translate();
+  const projectionMeta = {
+    rotate: projection.rotate().slice(0, 2) as [number, number],
+    center: projection.center() as [number, number],
+    parallels: projection.parallels() as [number, number],
+    scale: projection.scale(),
+    translate: [translateX, translateY] as [number, number],
+  };
+
   const body = entries
     .map(
       (entry) =>
@@ -143,6 +155,19 @@ export const ALABAMA_VIEW_HEIGHT = ${height};
 
 /** Outline of the state, derived by merging the 67 county polygons. */
 export const ALABAMA_OUTLINE_PATH = '${outlinePath}';
+
+/**
+ * The exact projection these paths were generated with. Rebuild it at runtime
+ * (see src/utils/alabamaProjection.ts) to place lat/lng points in this same
+ * coordinate space.
+ */
+export const ALABAMA_PROJECTION = {
+  rotate: [${projectionMeta.rotate[0]}, ${projectionMeta.rotate[1]}] as [number, number],
+  center: [${projectionMeta.center[0]}, ${projectionMeta.center[1]}] as [number, number],
+  parallels: [${projectionMeta.parallels[0]}, ${projectionMeta.parallels[1]}] as [number, number],
+  scale: ${projectionMeta.scale},
+  translate: [${projectionMeta.translate[0]}, ${projectionMeta.translate[1]}] as [number, number],
+};
 
 /** County geometry keyed by 5-digit Census FIPS code. */
 export const alabamaCountyGeometry: Record<string, CountyGeometry> = {
