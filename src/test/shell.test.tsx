@@ -14,7 +14,11 @@ async function renderApp(path = '/') {
   const result = render(<App />);
   // Routes are lazily imported, so wait for real page content rather than for
   // the Suspense fallback to clear — the header carries its own status region.
-  await screen.findByRole('heading', { name: /families served over time/i });
+  //
+  // The generous timeout is deliberate: resolving the first dynamic import can
+  // exceed Testing Library's 1s default when the whole suite runs in parallel,
+  // which made this test flaky roughly one run in three.
+  await screen.findByRole('heading', { name: /families served over time/i }, { timeout: 15000 });
   return result;
 }
 

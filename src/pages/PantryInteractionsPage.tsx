@@ -177,11 +177,12 @@ export const PantryInteractionsPage: React.FC = () => {
                 className="px-3 py-1 text-[12px] bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
               />
               <button
+                type="button"
                 onClick={handleExportLeaderboardCSV}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-                title="Export CSV"
+                aria-label="Export the pantry leaderboard as CSV"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           }

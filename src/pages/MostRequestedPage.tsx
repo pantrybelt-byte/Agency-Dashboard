@@ -261,11 +261,12 @@ export const MostRequestedPage: React.FC = () => {
               />
             </div>
             <button
+              type="button"
               onClick={handleExportCSV}
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-              title="Export CSV"
+              aria-label="Export the requested items list as CSV"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
         }

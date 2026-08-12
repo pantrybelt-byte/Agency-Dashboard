@@ -191,11 +191,12 @@ export const SettingsPage: React.FC = () => {
                   </span>
                 )}
                 <button
+                  type="button"
                   onClick={() => handleDeleteAlert(alert.id)}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-white/[0.06] transition-colors cursor-pointer"
-                  title="Delete alert"
+                  aria-label={`Delete the ${alert.metric} alert for ${alert.countyOrPantry}`}
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
