@@ -1,134 +1,113 @@
-import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
-import { getFirestore, collection, onSnapshot, query, type Firestore } from 'firebase/firestore';
-import type { PantryMetric, FoodDesertZone, ThresholdAlert } from '../types';
-import { mockPantryMetrics, mockFoodDesertZones, mockThresholdAlerts } from '../data/mockData';
+/**
+ * Firebase initialisation.
+ *
+ * Everything here is lazy and defensive on purpose: the dashboard must run
+ * with no Firebase project at all (the demo path), with a partially filled
+ * `.env` (a developer mid-setup), and with a live project — without any of
+ * those three cases crashing the other two.
+ *
+ * A note on the API key: `VITE_FIREBASE_API_KEY` is **not** a secret. Firebase
+ * web API keys are public identifiers that ship in every client bundle. Access
+ * control comes from Firestore security rules and App Check, never from
+ * keeping this value hidden.
+ */
+import { initializeApp, getApps, type FirebaseApp, type FirebaseOptions } from 'firebase/app';
+import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getAuth, type Auth } from 'firebase/auth';
+import { isFirebaseEnabled, readEnv } from './firebaseStatus';
 
-// Firebase environment configuration
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
-};
+export {
+  getFirebaseStatus,
+  checkFirebaseConnectionStatus,
+  isFirebaseEnabled,
+  type FirebaseStatus,
+} from './firebaseStatus';
 
-export const isFirebaseEnabled =
-  import.meta.env.VITE_USE_FIREBASE === 'true' &&
-  Boolean(import.meta.env.VITE_FIREBASE_API_KEY);
-
-let app: FirebaseApp | null = null;
-let db: Firestore | null = null;
-
-if (isFirebaseEnabled) {
-  try {
-    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-    db = getFirestore(app);
-    console.log('[AccessBelt Firebase] Firestore initialized successfully.');
-  } catch (error) {
-    console.warn('[AccessBelt Firebase] Initialization fallback to mock data:', error);
-  }
-}
-
-export const COLLECTIONS = {
-  PANTRIES: 'pantries',
-  FOOD_DESERTS: 'foodDeserts',
-  ALERTS: 'thresholdAlerts',
-  VISITS: 'dailyVisits',
-};
-
-export function getDb(): Firestore | null {
-  return db;
-}
-
-export function getFirebaseStatus(): { isConnected: boolean; mode: 'Firestore Live' | 'Mock Stream' } {
+function buildConfig(): FirebaseOptions {
   return {
-    isConnected: isFirebaseEnabled && db !== null,
-    mode: isFirebaseEnabled && db !== null ? 'Firestore Live' : 'Mock Stream',
+    apiKey: readEnv('VITE_FIREBASE_API_KEY'),
+    authDomain: readEnv('VITE_FIREBASE_AUTH_DOMAIN'),
+    projectId: readEnv('VITE_FIREBASE_PROJECT_ID'),
+    storageBucket: readEnv('VITE_FIREBASE_STORAGE_BUCKET'),
+    messagingSenderId: readEnv('VITE_FIREBASE_MESSAGING_SENDER_ID'),
+    appId: readEnv('VITE_FIREBASE_APP_ID'),
+    measurementId: readEnv('VITE_FIREBASE_MEASUREMENT_ID'),
   };
 }
 
-/**
- * Subscribe to Pantries in Firestore (or fallback to Mock Data)
- */
-export function subscribeToPantries(callback: (pantries: PantryMetric[]) => void): () => void {
-  if (db && isFirebaseEnabled) {
-    const q = query(collection(db, COLLECTIONS.PANTRIES));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const pantries: PantryMetric[] = [];
-        snapshot.forEach((doc) => {
-          pantries.push({ id: doc.id, ...doc.data() } as PantryMetric);
-        });
-        callback(pantries.length > 0 ? pantries : mockPantryMetrics);
-      },
-      (err) => {
-        console.warn('[Firebase Firestore] Error fetching pantries, using mock:', err);
-        callback(mockPantryMetrics);
-      }
-    );
-    return unsubscribe;
-  }
-
-  callback(mockPantryMetrics);
-  return () => {};
-}
+let cachedApp: FirebaseApp | null = null;
+let cachedFirestore: Firestore | null = null;
+let cachedAuth: Auth | null = null;
+let initialisationError: Error | null = null;
 
 /**
- * Subscribe to Food Desert Zones
+ * Initialise (once) and return the Firebase app, or null when live data is
+ * not enabled or initialisation failed. Callers fall back to demo data.
  */
-export function subscribeToFoodDeserts(callback: (zones: FoodDesertZone[]) => void): () => void {
-  if (db && isFirebaseEnabled) {
-    const q = query(collection(db, COLLECTIONS.FOOD_DESERTS));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const zones: FoodDesertZone[] = [];
-        snapshot.forEach((doc) => {
-          zones.push({ id: doc.id, ...doc.data() } as FoodDesertZone);
-        });
-        callback(zones.length > 0 ? zones : mockFoodDesertZones);
-      },
-      (err) => {
-        console.warn('[Firebase Firestore] Error fetching food deserts, using mock:', err);
-        callback(mockFoodDesertZones);
-      }
-    );
-    return unsubscribe;
-  }
+export function getFirebaseApp(): FirebaseApp | null {
+  if (!isFirebaseEnabled()) return null;
+  if (initialisationError) return null;
+  if (cachedApp) return cachedApp;
 
-  callback(mockFoodDesertZones);
-  return () => {};
+  try {
+    // Vite HMR can re-execute this module; reuse an existing app if present.
+    cachedApp = getApps()[0] ?? initializeApp(buildConfig());
+    return cachedApp;
+  } catch (error) {
+    initialisationError = error instanceof Error ? error : new Error(String(error));
+    console.error('[firebase] initialisation failed, falling back to demo data:', initialisationError);
+    return null;
+  }
+}
+
+export function getDb(): Firestore | null {
+  if (cachedFirestore) return cachedFirestore;
+  const app = getFirebaseApp();
+  if (!app) return null;
+
+  try {
+    cachedFirestore = getFirestore(app);
+    return cachedFirestore;
+  } catch (error) {
+    console.error('[firebase] Firestore unavailable, falling back to demo data:', error);
+    return null;
+  }
+}
+
+export function getFirebaseAuth(): Auth | null {
+  if (cachedAuth) return cachedAuth;
+  const app = getFirebaseApp();
+  if (!app) return null;
+
+  try {
+    cachedAuth = getAuth(app);
+    return cachedAuth;
+  } catch (error) {
+    console.error('[firebase] Auth unavailable:', error);
+    return null;
+  }
+}
+
+/** Test seam — clears the memoised handles. */
+export function resetFirebaseForTests(): void {
+  cachedApp = null;
+  cachedFirestore = null;
+  cachedAuth = null;
+  initialisationError = null;
 }
 
 /**
- * Subscribe to Threshold Alerts
+ * Firestore collections this dashboard reads.
+ *
+ * These are all *rollup* collections written by Cloud Functions, never the raw
+ * event stream the AccessBelt consumer app produces. Reading raw events would
+ * mean one document read per check-in, which is both slow and unbounded in
+ * cost. See docs/superpowers/plans/2026-08-11-roadmap.md, Phase 3.
  */
-export function subscribeToThresholdAlerts(callback: (alerts: ThresholdAlert[]) => void): () => void {
-  if (db && isFirebaseEnabled) {
-    const q = query(collection(db, COLLECTIONS.ALERTS));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const alerts: ThresholdAlert[] = [];
-        snapshot.forEach((doc) => {
-          alerts.push({ id: doc.id, ...doc.data() } as ThresholdAlert);
-        });
-        callback(alerts.length > 0 ? alerts : mockThresholdAlerts);
-      },
-      (err) => {
-        console.warn('[Firebase Firestore] Error fetching alerts, using mock:', err);
-        callback(mockThresholdAlerts);
-      }
-    );
-    return unsubscribe;
-  }
-
-  callback(mockThresholdAlerts);
-  return () => {};
-}
-
-export function checkFirebaseConnectionStatus(): { isConnected: boolean; mode: 'Firestore Live' | 'Mock Stream' } {
-  return getFirebaseStatus();
-}
+export const COLLECTIONS = {
+  pantries: 'pantries',
+  dailyInteractions: 'rollupsDailyInteractions',
+  countyMetrics: 'countyMetrics',
+  thresholdAlerts: 'thresholdAlerts',
+  scheduledReports: 'scheduledReports',
+} as const;

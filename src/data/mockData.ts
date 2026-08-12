@@ -25,6 +25,7 @@ export const mockAgencyUsers: AgencyUser[] = [
     email: 'p.hawkins@uwriverregion.org',
     organization: 'United Way River Region',
     role: 'Executive Director',
+    subscriptionTier: 'pro',
     region: 'Central Alabama River Region',
     assignedCounties: ['Montgomery', 'Autauga', 'Elmore', 'Lowndes', 'Macon', 'Dallas', 'Wilcox', 'Perry'],
     permissions: {
@@ -39,6 +40,7 @@ export const mockAgencyUsers: AgencyUser[] = [
     email: 'm.coleman@usda.gov',
     organization: 'USDA Food & Nutrition Service',
     role: 'Regional Coordinator',
+    subscriptionTier: 'pro',
     region: 'Alabama District 7',
     assignedCounties: ['Lowndes', 'Macon', 'Dallas', 'Wilcox', 'Perry'],
     permissions: {
@@ -53,6 +55,7 @@ export const mockAgencyUsers: AgencyUser[] = [
     email: 't.nguyen@cacaa.org',
     organization: 'Community Action Committee',
     role: 'Data Analyst',
+    subscriptionTier: 'pro',
     region: 'River Region Counties',
     assignedCounties: ['Montgomery', 'Elmore'],
     permissions: {

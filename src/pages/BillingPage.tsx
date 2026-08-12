@@ -161,7 +161,7 @@ export const BillingPage: React.FC<BillingPageProps> = () => {
           <div className="w-full h-2 rounded-full bg-white/[0.06] overflow-hidden">
             <div className="h-full bg-emerald-400 rounded-full" style={{ width: '60%' }} />
           </div>
-          <p className="text-[10px] text-slate-500">Next renewal: Sept 1, 2026 ($18,000 billed annually)</p>
+          <p className="text-[10px] text-slate-400">Next renewal: Sept 1, 2026 ($18,000 billed annually)</p>
         </div>
 
         <div className="flex items-center justify-end gap-3">
@@ -234,7 +234,7 @@ export const BillingPage: React.FC<BillingPageProps> = () => {
                   <span className="text-3xl font-black text-white">${price.toLocaleString()}</span>
                   <span className="text-[12px] text-slate-400">/ month</span>
                   {billingCycle === 'annual' && (
-                    <span className="text-[10px] text-slate-500 font-mono block">
+                    <span className="text-[10px] text-slate-400 font-mono block">
                       (billed ${(price * 12).toLocaleString()}/yr)
                     </span>
                   )}
@@ -360,12 +360,12 @@ export const BillingPage: React.FC<BillingPageProps> = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-white/[0.06]">
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-left">Invoice ID</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-left">Date</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-left">Plan</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">Amount</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-center">Status</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">Receipt</th>
+                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-left">Invoice ID</th>
+                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-left">Date</th>
+                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-left">Plan</th>
+                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-right">Amount</th>
+                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-center">Status</th>
+                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-right">Receipt</th>
               </tr>
             </thead>
             <tbody>

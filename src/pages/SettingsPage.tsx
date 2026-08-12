@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
 import { Building2, Mail, MapPin, Bell, Key, Shield, Plus, Trash2, CheckCircle, Database } from 'lucide-react';
 import { ChartCard } from '../components/ui/ChartCard';
-import type { AgencyUser } from '../types';
-import { mockThresholdAlerts } from '../data/mockData';
-import { getFirebaseStatus } from '../services/firebase';
+import { getFirebaseStatus } from '../services/firebaseStatus';
+import {
+  deleteThresholdAlert,
+  saveThresholdAlert,
+  subscribeThresholdAlerts,
+} from '../services/dashboardData';
+import { useAuth } from '../hooks/useAuth';
+import { useLiveData } from '../hooks/useLiveData';
+import type { ThresholdAlert } from '../types';
 
-interface SettingsPageProps {
-  user: AgencyUser;
-}
-
-export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
-  const [alerts, setAlerts] = useState(mockThresholdAlerts);
+export const SettingsPage: React.FC = () => {
+  const { user } = useAuth();
+  const { data: alerts } = useLiveData(subscribeThresholdAlerts, [] as ThresholdAlert[]);
   const [showAddAlert, setShowAddAlert] = useState(false);
   const [newCounty, setNewCounty] = useState('Lowndes County');
   const [newMetric, setNewMetric] = useState('Food Access Score');
@@ -19,25 +22,28 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
   const firebaseStatus = getFirebaseStatus();
 
-  const handleAddAlert = (e: React.FormEvent) => {
+  // RequireAuth guarantees a user before this renders; this satisfies the type
+  // checker without a non-null assertion.
+  if (!user) return null;
+
+  const handleAddAlert = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newAlert = {
+    await saveThresholdAlert({
       id: `alt_${Date.now()}`,
       metric: newMetric,
       countyOrPantry: newCounty,
-      condition: 'less_than' as const,
+      condition: 'less_than',
       thresholdValue: newThreshold,
       notifyEmail: user.email,
       isTriggered: false,
-    };
-    setAlerts([newAlert, ...alerts]);
+    });
     setShowAddAlert(false);
-    setToastMessage(`Threshold alert created for ${newCounty}!`);
+    setToastMessage(`Threshold alert created for ${newCounty}.`);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleDeleteAlert = (id: string) => {
-    setAlerts(alerts.filter(a => a.id !== id));
+  const handleDeleteAlert = async (id: string) => {
+    await deleteThresholdAlert(id);
   };
 
   return (
@@ -112,7 +118,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         }
       >
         {showAddAlert && (
-          <form onSubmit={handleAddAlert} className="mb-4 p-4 rounded-xl bg-white/[0.03] border border-white/[0.08] space-y-3">
+          <form onSubmit={(event) => void handleAddAlert(event)} className="mb-4 p-4 rounded-xl bg-white/[0.03] border border-white/[0.08] space-y-3">
             <p className="text-[13px] font-semibold text-white">Create New Threshold Alert</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
@@ -193,8 +199,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                   </span>
                 )}
                 <button
-                  onClick={() => handleDeleteAlert(alert.id)}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-white/[0.06] transition-colors cursor-pointer"
+                  onClick={() => void handleDeleteAlert(alert.id)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-white/[0.06] transition-colors cursor-pointer"
                   title="Delete alert"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -208,20 +214,32 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
       {/* Firebase Integration Status */}
       <ChartCard title="Firebase & Live Database Integration" subtitle="Live stream listener configuration">
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+          <div className={`flex items-center justify-between p-4 rounded-xl border ${
+              firebaseStatus.enabled
+                ? 'bg-emerald-500/10 border-emerald-500/25'
+                : 'bg-amber-500/10 border-amber-500/30'
+            }`}>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
                 <Database className="w-5 h-5 text-emerald-400" />
               </div>
               <div>
-                <p className="text-[13px] font-bold text-white">Firebase Firestore / Realtime DB Ready</p>
-                <p className="text-[12px] text-slate-400">Current Mode: {firebaseStatus.mode}</p>
+                <p className="text-[13px] font-bold text-white">
+                  {firebaseStatus.enabled ? 'Live Firestore data' : 'Demonstration data'}
+                </p>
+                <p className="text-[12px] text-slate-300">
+                  {firebaseStatus.enabled
+                    ? 'Real-time listeners are attached to the rollup collections.'
+                    : firebaseStatus.requested
+                      ? `Live data was requested but the configuration is incomplete. Missing: ${firebaseStatus.missingKeys.join(', ')}.`
+                      : 'Set VITE_USE_FIREBASE=true with a complete Firebase config to read live data.'}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse-glow" />
               <span className="text-[12px] text-emerald-400 font-semibold">
-                {firebaseStatus.isConnected ? 'Connected to Firestore' : 'Mock Stream Ready'}
+                {firebaseStatus.isConnected ? 'Connected' : 'Not connected'}
               </span>
             </div>
           </div>
@@ -233,8 +251,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                 <Key className="w-5 h-5 text-indigo-400" />
               </div>
               <div>
-                <p className="text-[13px] font-medium text-white">Firebase API Configuration</p>
-                <p className="text-[12px] text-slate-400">Add your Firebase config credentials in .env</p>
+                <p className="text-[13px] font-medium text-white">Firebase configuration</p>
+                <p className="text-[12px] text-slate-300">
+                  Copy <code className="font-mono">.env.example</code> to{' '}
+                  <code className="font-mono">.env.local</code>. The web API key is a public
+                  identifier, not a secret — access is controlled by Firestore security rules and
+                  App Check.
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">

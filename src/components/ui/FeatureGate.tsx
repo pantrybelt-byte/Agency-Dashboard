@@ -18,7 +18,9 @@ const tierHierarchy: Record<SubscriptionTier, number> = {
 
 export const FeatureGate: React.FC<FeatureGateProps> = ({
   requiredTier,
-  userTier = 'pro',
+  // Default to the lowest tier: an unset subscription must not unlock paid
+  // features. Failing closed is the only safe default for an entitlement gate.
+  userTier = 'community',
   featureName,
   featureDescription,
   children,

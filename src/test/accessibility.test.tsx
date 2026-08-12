@@ -8,7 +8,6 @@ import { PantryInteractionsPage } from '../pages/PantryInteractionsPage';
 import { MostRequestedPage } from '../pages/MostRequestedPage';
 import { ReportsPage } from '../pages/ReportsPage';
 import { SettingsPage } from '../pages/SettingsPage';
-import { mockCurrentUser } from '../data/mockData';
 import { LoginPage } from '../pages/LoginPage';
 
 /**
@@ -28,7 +27,7 @@ const pages: [string, () => React.ReactElement][] = [
   ['Pantry Interactions', () => <PantryInteractionsPage />],
   ['Most Requested', () => <MostRequestedPage />],
   ['Reports', () => <ReportsPage />],
-  ['Settings', () => <SettingsPage user={mockCurrentUser} />],
+  ['Settings', () => <SettingsPage />],
 ];
 
 describe('accessibility', () => {
