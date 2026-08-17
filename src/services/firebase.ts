@@ -60,13 +60,21 @@ export function getFirebaseApp(): FirebaseApp | null {
   }
 }
 
+/**
+ * Named Firestore database dedicated to this dashboard, separate from the
+ * consumer app's `(default)` database (and from the Operator Portal's own
+ * `accessbelt-operator` database) so each product's collections stay in
+ * their own namespace instead of one shared list.
+ */
+const DATABASE_ID = 'accessbelt-agency';
+
 export function getDb(): Firestore | null {
   if (cachedFirestore) return cachedFirestore;
   const app = getFirebaseApp();
   if (!app) return null;
 
   try {
-    cachedFirestore = getFirestore(app);
+    cachedFirestore = getFirestore(app, DATABASE_ID);
     return cachedFirestore;
   } catch (error) {
     console.error('[firebase] Firestore unavailable, falling back to demo data:', error);
