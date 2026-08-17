@@ -28,3 +28,6 @@ coverage
 
 # Playwright MCP output
 .playwright-mcp
+
+# Vercel local project link
+.vercel
