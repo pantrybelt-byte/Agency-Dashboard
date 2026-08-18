@@ -158,6 +158,27 @@ export const FoodDesertsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Pin Geolocation Verification Tier Filter */}
+      <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex flex-wrap items-center justify-between gap-3 text-[12px]">
+        <div className="flex items-center gap-2">
+          <span className="text-slate-400 font-medium">Location Pin Integrity Filter:</span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold flex items-center gap-1">
+              🟢 Level 3 Field Verified (18)
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold flex items-center gap-1">
+              🟡 Level 2 Satellite Pin Dragged (7)
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 font-semibold flex items-center gap-1">
+              🔴 Level 1 Unverified Address (3)
+            </span>
+          </div>
+        </div>
+        <span className="text-[11px] text-slate-400">
+          92.8% of Black Belt locations satellite-confirmed
+        </span>
+      </div>
+
       {/* Alert Summary KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card p-5 border-l-4 border-l-red-500/60">
