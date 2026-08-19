@@ -2,7 +2,10 @@ import React, { useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from 'recharts';
-import { MapPin, AlertTriangle, TrendingDown, DollarSign, ShoppingCart, ChevronDown, ChevronUp, Download, Bell, Sparkles, Navigation, Layers } from 'lucide-react';
+import { MapPin, AlertTriangle, TrendingDown, DollarSign, ShoppingCart, ChevronDown, ChevronUp, Download, Bell, Map as MapIcon, Navigation, Layers } from 'lucide-react';
+import { VerificationBadge } from '../components/ui/StatusBadge';
+import { ACCENTS } from '../config/presets';
+import { usePreset } from '../hooks/usePreset';
 import { ChartCard } from '../components/ui/ChartCard';
 import { AlabamaHeatMap } from '../components/ui/AlabamaHeatMap';
 import { AlabamaGisMap } from '../components/ui/AlabamaGisMap';
@@ -45,6 +48,8 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 };
 
 export const FoodDesertsPage: React.FC = () => {
+  const { preset } = usePreset();
+  const accent = ACCENTS[preset.accent];
   const { user } = useAuth();
   const { countyScope } = useDashboardFilters();
   const counties = useLiveData(subscribeCountyMetrics, []);
@@ -101,22 +106,22 @@ export const FoodDesertsPage: React.FC = () => {
     <div className="space-y-6">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#1a1d2e] border border-amber-500/30 shadow-xl px-4 py-3 rounded-xl flex items-center gap-3 animate-fade-in-up">
+        <div className="card-glass fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 animate-fade-in-up">
           <Bell className="w-5 h-5 text-amber-400 shrink-0" />
           <p className="text-[13px] text-white">{toastMessage}</p>
         </div>
       )}
 
       {/* Top Title Banner */}
-      <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-white leading-tight">Alabama Food Desert Vulnerability Index</h2>
-            <p className="text-[12px] text-slate-400">
-              Interactive 67-County Alabama SVG Vector Heatmap & GIS Pantry Location pins based on USDA & Census metrics.
+      <div className={`card-accent card ${accent.text} p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4`}>
+        <div className="flex items-center gap-3.5 min-w-0">
+          <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${accent.border} ${accent.bg}`}>
+            <MapIcon className={`h-5 w-5 ${accent.text}`} aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-bold tracking-tight text-white">Alabama Food Desert Vulnerability Index</h2>
+            <p className="mt-0.5 text-[12px] text-slate-300">
+              67-county vector heatmap and GIS pantry pins, derived from USDA and Census access metrics.
             </p>
           </div>
         </div>
@@ -150,66 +155,64 @@ export const FoodDesertsPage: React.FC = () => {
 
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500 text-white text-[12px] font-semibold hover:bg-emerald-600 transition-colors cursor-pointer shadow-md shadow-emerald-500/20 shrink-0"
+            className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-[12px] font-bold text-[#0b0d14] transition-colors cursor-pointer ${accent.solid} ${accent.solidHover}`}
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="h-3.5 w-3.5" aria-hidden="true" />
             Export CSV
           </button>
         </div>
       </div>
 
-      {/* Pin Geolocation Verification Tier Filter */}
-      <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex flex-wrap items-center justify-between gap-3 text-[12px]">
-        <div className="flex items-center gap-2">
-          <span className="text-slate-400 font-medium">Location Pin Integrity Filter:</span>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold flex items-center gap-1">
-              🟢 Level 3 Field Verified (18)
-            </span>
-            <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold flex items-center gap-1">
-              🟡 Level 2 Satellite Pin Dragged (7)
-            </span>
-            <span className="px-2.5 py-1 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 font-semibold flex items-center gap-1">
-              🔴 Level 1 Unverified Address (3)
-            </span>
-          </div>
+      {/* Pin integrity — how each mapped location was established */}
+      <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[12px] font-medium text-slate-400">Location pin integrity</span>
+          <span className="flex flex-wrap items-center gap-1.5">
+            <VerificationBadge level={3} />
+            <span className="font-mono text-[11px] text-slate-400">18</span>
+            <VerificationBadge level={2} />
+            <span className="font-mono text-[11px] text-slate-400">7</span>
+            <VerificationBadge level={1} />
+            <span className="font-mono text-[11px] text-slate-400">3</span>
+          </span>
         </div>
         <span className="text-[11px] text-slate-400">
-          92.8% of Black Belt locations satellite-confirmed
+          <span className="font-mono text-slate-300">92.8%</span> of Black Belt locations
+          satellite-confirmed
         </span>
       </div>
 
       {/* Alert Summary KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="card p-5 border-l-4 border-l-red-500/60">
+        <div className="card card-hover p-5 metric-glow-rose">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
               <AlertTriangle className="w-5 h-5 text-red-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{criticalCount}</p>
+              <p className="text-2xl font-bold tabular-nums text-white">{criticalCount}</p>
               <p className="text-[12px] text-slate-400">Critical Zones (&lt; 25 Access Score)</p>
             </div>
           </div>
         </div>
-        <div className="card p-5 border-l-4 border-l-amber-500/60">
+        <div className="card card-hover p-5 metric-glow-amber">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
               <TrendingDown className="w-5 h-5 text-amber-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{atRiskCount}</p>
+              <p className="text-2xl font-bold tabular-nums text-white">{atRiskCount}</p>
               <p className="text-[12px] text-slate-400">At-Risk Alabama Counties</p>
             </div>
           </div>
         </div>
-        <div className="card p-5 border-l-4 border-l-blue-500/60">
+        <div className="card card-hover p-5 metric-glow-blue">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
               <MapPin className="w-5 h-5 text-blue-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{avgDistance} mi</p>
+              <p className="text-2xl font-bold tabular-nums text-white">{avgDistance} mi</p>
               <p className="text-[12px] text-slate-400">Statewide Avg Pantry Distance</p>
             </div>
           </div>

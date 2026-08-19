@@ -1,105 +1,40 @@
 import React, { useState } from 'react';
-import { CreditCard, Check, ShieldCheck, Sparkles, Download, Zap, ArrowRight, ExternalLink } from 'lucide-react';
+import { CreditCard, Download, Zap, ArrowRight, ExternalLink, FileText, Landmark, Building2, Mail, Webhook } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { ChartCard } from '../components/ui/ChartCard';
-import type { AgencyUser, SubscriptionTier } from '../types';
+import { EntitlementBadge } from '../components/ui/StatusBadge';
+import { UpgradeModal } from '../components/ui/UpgradeModal';
+import {
+  ACCENTS,
+  BASE_PLATFORM,
+  VIEW_PRESETS,
+  formatPriceBand,
+  type ViewPreset,
+} from '../config/presets';
+import { usePreset } from '../hooks/usePreset';
+import type { AgencyUser } from '../types';
 
 interface BillingPageProps {
   user?: AgencyUser;
 }
 
-const tiers = [
-  {
-    id: 'community' as SubscriptionTier,
-    name: 'Community Plan',
-    tagline: 'Ideal for local single-county non-profits & county action committees',
-    monthlyPrice: 400,
-    annualPrice: 320, // 20% discount
-    stripeMonthlyPriceId: 'price_community_monthly',
-    stripeAnnualPriceId: 'price_community_annual',
-    features: [
-      '1 Assigned County Scope',
-      'Up to 5 Active Partner Pantries',
-      'Basic Age & Household Demographics',
-      'Standard CSV Exports',
-      'Community ZIP Code Metrics',
-      'Email Support',
-    ],
-    highlight: false,
-    badge: 'Tier 1',
-  },
-  {
-    id: 'pro' as SubscriptionTier,
-    name: 'Regional Pro Plan',
-    tagline: 'For regional agencies like United Way & regional food bank hubs',
-    monthlyPrice: 1500,
-    annualPrice: 1200, // 20% discount ($14,400/yr)
-    stripeMonthlyPriceId: 'price_pro_monthly',
-    stripeAnnualPriceId: 'price_pro_annual',
-    features: [
-      'Up to 10 Assigned Counties Scope',
-      '67-County Alabama SVG Vector Heatmap',
-      'USDA Civil Rights Demographics Breakdown',
-      'Automated Weekly & Monthly Email Report Scheduler',
-      'Custom Threshold Alert Rule Builder',
-      'Period Comparison Mode (Current vs Previous)',
-      'Priority Agency Phone & Email Support',
-    ],
-    highlight: true,
-    badge: 'Tier 2 · Most Popular',
-  },
-  {
-    id: 'enterprise' as SubscriptionTier,
-    name: 'Enterprise Impact Plan',
-    tagline: 'For state departments (ADECA, USDA Regional, Feeding Alabama)',
-    monthlyPrice: 5000,
-    annualPrice: 4000, // 20% discount ($48,000/yr)
-    stripeMonthlyPriceId: 'price_enterprise_monthly',
-    stripeAnnualPriceId: 'price_enterprise_annual',
-    features: [
-      'All 67 Alabama Counties Statewide Live Feed',
-      'Interactive GIS Location Marker Mapping',
-      'Direct Firebase Firestore Live Data Feed API',
-      'Multi-User SSO & Role-Based Access Control',
-      'Custom Branded Grant PDF Templates',
-      'Dedicated Grant & Data Analytics Specialist',
-      '99.9% Uptime SLA & Invoicing / Purchase Order Option',
-    ],
-    highlight: false,
-    badge: 'Tier 3 · State Level',
-  },
-];
 
 const mockInvoices = [
-  { id: 'INV-2026-008', date: 'Aug 1, 2026', amount: '$1,500.00', status: 'Paid', plan: 'Regional Pro Plan (Monthly)', pdf: 'invoice_aug_2026.pdf' },
-  { id: 'INV-2026-007', date: 'Jul 1, 2026', amount: '$1,500.00', status: 'Paid', plan: 'Regional Pro Plan (Monthly)', pdf: 'invoice_jul_2026.pdf' },
-  { id: 'INV-2026-006', date: 'Jun 1, 2026', amount: '$1,500.00', status: 'Paid', plan: 'Regional Pro Plan (Monthly)', pdf: 'invoice_jun_2026.pdf' },
+  { id: 'INV-2026-008', date: 'Aug 1, 2026', amount: '$400.00', status: 'Paid', plan: 'Base platform — monthly', pdf: 'invoice_aug_2026.pdf' },
+  { id: 'INV-2026-007', date: 'Jul 1, 2026', amount: '$400.00', status: 'Paid', plan: 'Base platform — monthly', pdf: 'invoice_jul_2026.pdf' },
+  { id: 'INV-2026-006', date: 'Jun 1, 2026', amount: '$8,500.00', status: 'Paid', plan: 'Corporate CSR module — annual contract', pdf: 'invoice_jun_2026.pdf' },
 ];
 
 export const BillingPage: React.FC<BillingPageProps> = () => {
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('annual');
-  const [currentTier, setCurrentTier] = useState<SubscriptionTier>('pro');
-  const [stripeLoading, setStripeLoading] = useState<string | null>(null);
+  const { isUnlocked } = usePreset();
+  const [upgradeTarget, setUpgradeTarget] = useState<ViewPreset | null>(null);
+  const [portalBusy, setPortalBusy] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const handleSelectTier = (tierId: SubscriptionTier, priceId: string) => {
-    setStripeLoading(tierId);
-    // Simulate Stripe Checkout Redirect
-    setTimeout(() => {
-      setStripeLoading(null);
-      if (tierId === currentTier) {
-        setToastMessage('Redirecting to Stripe Billing Portal to manage your existing subscription...');
-      } else {
-        setCurrentTier(tierId);
-        setToastMessage(`Plan updated to ${tierId.toUpperCase()}! Stripe Checkout Session created for ${priceId}.`);
-      }
-      setTimeout(() => setToastMessage(null), 4000);
-    }, 1200);
-  };
-
   const handleOpenStripePortal = () => {
-    setStripeLoading('portal');
+    setPortalBusy(true);
     setTimeout(() => {
-      setStripeLoading(null);
+      setPortalBusy(false);
       setToastMessage('Redirecting to Stripe Customer Portal (manage cards, invoices, tax IDs)...');
       setTimeout(() => setToastMessage(null), 4000);
     }, 1000);
@@ -109,27 +44,27 @@ export const BillingPage: React.FC<BillingPageProps> = () => {
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Toast */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#1a1d2e] border border-emerald-500/30 shadow-2xl px-4 py-3 rounded-xl flex items-center gap-3 animate-fade-in-up">
+        <div className="card-glass fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 animate-fade-in-up">
           <Zap className="w-5 h-5 text-emerald-400 shrink-0" />
           <p className="text-[13px] text-white font-medium">{toastMessage}</p>
         </div>
       )}
 
       {/* Top Banner */}
-      <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 border border-emerald-500/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="card-accent card text-emerald-400 p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20">
-            <CreditCard className="w-6 h-6" />
-          </div>
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10">
+            <CreditCard className="h-5 w-5 text-emerald-400" aria-hidden="true" />
+          </span>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-white tracking-tight">Agency Subscription & Billing</h2>
+              <h2 className="text-[15px] font-bold text-white tracking-tight">Agency subscription &amp; billing</h2>
               <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-full uppercase">
                 Grant Eligible
               </span>
             </div>
             <p className="text-[12px] text-slate-300 mt-0.5">
-              Manage agency tier, payment methods, and automated Stripe billing for United Way & USDA grant accounts.
+              Two ways to pay: purchase order with Net-30 terms, or self-service card subscription.
             </p>
           </div>
         </div>
@@ -138,146 +73,201 @@ export const BillingPage: React.FC<BillingPageProps> = () => {
           onClick={handleOpenStripePortal}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.1] text-white text-[12px] font-bold hover:bg-white/[0.1] transition-all cursor-pointer shadow-sm shrink-0 self-end md:self-auto"
         >
-          <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
-          Manage Stripe Portal
+          <ExternalLink className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
+          {portalBusy ? 'Opening portal…' : 'Manage Stripe Portal'}
         </button>
       </div>
 
-      {/* Current Active Plan Overview Card */}
-      <div className="p-5 rounded-2xl bg-[#12141f] border border-white/[0.08] grid grid-cols-1 lg:grid-cols-3 gap-5 items-center">
-        <div className="space-y-1">
-          <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-            Active Subscription
-          </span>
-          <h3 className="text-xl font-extrabold text-white">Regional Pro Plan (Tier 2)</h3>
-          <p className="text-[12px] text-slate-400">United Way River Region · Corporate Account</p>
-        </div>
-
-        <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.04] space-y-1.5 text-left">
-          <div className="flex justify-between text-[12px]">
-            <span className="text-slate-400">Assigned Counties Usage:</span>
-            <span className="text-white font-bold">6 / 10 Counties</span>
-          </div>
-          <div className="w-full h-2 rounded-full bg-white/[0.06] overflow-hidden">
-            <div className="h-full bg-emerald-400 rounded-full" style={{ width: '60%' }} />
-          </div>
-          <p className="text-[10px] text-slate-400">Next renewal: Sept 1, 2026 ($18,000 billed annually)</p>
-        </div>
-
-        <div className="flex items-center justify-end gap-3">
-          <button
-            onClick={handleOpenStripePortal}
-            className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-500 text-white text-[12px] font-bold hover:bg-emerald-600 transition-all cursor-pointer shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-1.5"
-          >
-            <ShieldCheck className="w-4 h-4" />
-            Stripe Portal Active
-          </button>
-        </div>
-      </div>
-
-      {/* Billing Cycle Toggle */}
-      <div className="flex items-center justify-center gap-3 py-2">
-        <span className={`text-[13px] font-semibold ${billingCycle === 'monthly' ? 'text-white' : 'text-slate-400'}`}>
-          Monthly Billing
-        </span>
-        <button
-          onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'annual' : 'monthly')}
-          className="w-12 h-6 rounded-full bg-white/[0.1] border border-white/[0.15] p-0.5 transition-colors cursor-pointer relative"
-        >
-          <div
-            className={`w-5 h-5 rounded-full bg-emerald-400 shadow-md transition-transform ${
-              billingCycle === 'annual' ? 'transform translate-x-6' : ''
-            }`}
-          />
-        </button>
-        <div className="flex items-center gap-1.5">
-          <span className={`text-[13px] font-semibold ${billingCycle === 'annual' ? 'text-white' : 'text-slate-400'}`}>
-            Annual Billing
-          </span>
-          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-            Save 20%
-          </span>
-        </div>
-      </div>
-
-      {/* 3 Tier Pricing Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {tiers.map((tier) => {
-          const price = billingCycle === 'annual' ? tier.annualPrice : tier.monthlyPrice;
-          const isCurrent = currentTier === tier.id;
-          const priceId = billingCycle === 'annual' ? tier.stripeAnnualPriceId : tier.stripeMonthlyPriceId;
-
-          return (
-            <div
-              key={tier.id}
-              className={`rounded-2xl p-6 border transition-all flex flex-col justify-between relative overflow-hidden ${
-                tier.highlight
-                  ? 'border-emerald-500/50 bg-[#141829] shadow-2xl ring-1 ring-emerald-500/30'
-                  : 'border-white/[0.08] bg-[#12141f] hover:border-white/[0.15]'
-              }`}
-            >
-              {tier.highlight && (
-                <div className="absolute top-0 right-0 bg-gradient-to-l from-emerald-500 to-teal-500 text-white text-[10px] font-black uppercase px-3 py-1 rounded-bl-xl shadow-md">
-                  RECOMMENDED FOR AGENCIES
-                </div>
-              )}
-
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08]">
-                  {tier.badge}
+      {/* Procurement route — a county EMA or hospital system cannot pay by
+          card. Purchase order, W-9 and ACH is the only path their finance
+          office will accept, so it leads rather than sitting in a footnote. */}
+      <section
+        aria-labelledby="procurement-heading"
+        className="card border-emerald-500/25 p-5"
+      >
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 items-start gap-3.5">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10">
+              <Landmark className="h-5 w-5 text-emerald-400" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 id="procurement-heading" className="text-[15px] font-bold tracking-tight text-white">
+                  QuickBooks Net-30 &amp; W-9 vendor support
+                </h2>
+                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase text-emerald-400">
+                  Grant eligible
                 </span>
-
-                <h3 className="text-xl font-bold text-white mt-3">{tier.name}</h3>
-                <p className="text-[12px] text-slate-400 mt-1 min-h-[36px]">{tier.tagline}</p>
-
-                <div className="my-5 flex items-baseline gap-1.5">
-                  <span className="text-3xl font-black text-white">${price.toLocaleString()}</span>
-                  <span className="text-[12px] text-slate-400">/ month</span>
-                  {billingCycle === 'annual' && (
-                    <span className="text-[10px] text-slate-400 font-mono block">
-                      (billed ${(price * 12).toLocaleString()}/yr)
-                    </span>
-                  )}
-                </div>
-
-                <div className="space-y-2.5 pt-4 border-t border-white/[0.06] text-[12px] text-slate-300">
-                  {tier.features.map((feat, idx) => (
-                    <div key={idx} className="flex items-start gap-2">
-                      <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                      <span>{feat}</span>
-                    </div>
-                  ))}
-                </div>
               </div>
+              <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-slate-300">
+                Non-profits, hospital systems and government agencies can request a formal purchase
+                order invoice on Net-30 terms, paid by ACH bank deposit. We provide a signed W-9 and
+                vendor registration packet for your finance office.
+              </p>
 
-              <div className="mt-8 pt-4 border-t border-white/[0.06]">
-                <button
-                  onClick={() => handleSelectTier(tier.id, priceId)}
-                  disabled={stripeLoading === tier.id}
-                  className={`w-full py-3 rounded-xl text-[13px] font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                    isCurrent
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                      : tier.highlight
-                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25'
-                      : 'bg-white/[0.06] hover:bg-white/[0.12] text-white border border-white/[0.08]'
-                  }`}
-                >
-                  {stripeLoading === tier.id ? (
-                    'Connecting Stripe Checkout...'
-                  ) : isCurrent ? (
-                    'Current Active Plan'
-                  ) : (
-                    <>
-                      <span>Select {tier.name}</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              </div>
+              <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-[11px] sm:grid-cols-4">
+                <div>
+                  <dt className="text-slate-400">Payment terms</dt>
+                  <dd className="mt-0.5 font-mono font-semibold text-white">Net-30</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-400">Method</dt>
+                  <dd className="mt-0.5 font-semibold text-white">ACH deposit</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-400">Tax ID (W-9)</dt>
+                  <dd className="mt-0.5 font-mono font-semibold text-white">On request</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-400">PO minimum</dt>
+                  <dd className="mt-0.5 font-mono font-semibold text-white">$2,500</dd>
+                </div>
+              </dl>
             </div>
-          );
-        })}
-      </div>
+          </div>
+
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
+            <button
+              type="button"
+              onClick={() => setToastMessage('Purchase order request sent. Our team will email your invoice and W-9 within one business day.')}
+              className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-[12px] font-bold text-[#04140d] transition-colors hover:bg-emerald-400 cursor-pointer"
+            >
+              <FileText className="h-4 w-4" aria-hidden="true" />
+              Request PO invoice
+            </button>
+            <button
+              type="button"
+              onClick={() => setToastMessage('W-9 and vendor registration packet sent to your billing contact.')}
+              className="flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-[12px] font-semibold text-slate-200 transition-colors hover:bg-white/[0.08] hover:text-white cursor-pointer"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+              Download W-9
+            </button>
+            <a
+              href="mailto:accounts@accessbelt.org"
+              className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[12px] font-semibold text-slate-400 transition-colors hover:text-white"
+            >
+              <Mail className="h-4 w-4" aria-hidden="true" />
+              Contact accounts team
+            </a>
+          </div>
+        </div>
+
+        <p className="mt-5 flex items-center gap-2 border-t border-white/[0.08] pt-4 text-[11px] text-slate-400">
+          <Building2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          Smaller agencies can skip procurement entirely and subscribe by card below, from
+          <span className="font-mono text-slate-300">&nbsp;$400&nbsp;</span>to
+          <span className="font-mono text-slate-300">&nbsp;$500&nbsp;</span>per month.
+        </p>
+      </section>
+
+      {/* Base platform */}
+      <section aria-labelledby="base-plan-heading" className="card p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+              Active
+            </span>
+            <h2 id="base-plan-heading" className="mt-2 text-lg font-bold tracking-tight text-white">
+              {BASE_PLATFORM.name}
+            </h2>
+            <p className="mt-0.5 text-[12px] text-slate-300">{BASE_PLATFORM.includes}</p>
+          </div>
+          <div className="text-right">
+            <p className="font-mono text-3xl font-bold tabular-nums text-white">
+              ${BASE_PLATFORM.monthlyPrice}
+            </p>
+            <p className="text-[11px] text-slate-400">
+              per month · ${BASE_PLATFORM.annualPrice.toLocaleString()}/yr billed annually
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Module catalogue */}
+      <section aria-labelledby="modules-heading" className="space-y-4">
+        <div>
+          <h2 id="modules-heading" className="text-lg font-bold tracking-tight text-white">
+            Analytics modules
+          </h2>
+          <p className="mt-0.5 text-[12px] text-slate-300">
+            Purchased individually and priced by contract. Each unlocks a dedicated view and its
+            own export.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {VIEW_PRESETS.filter((preset) => preset.access === 'add-on').map((preset) => {
+            const owned = isUnlocked(preset.id);
+            const accent = ACCENTS[preset.accent];
+            const Icon = preset.icon;
+
+            return (
+              <article
+                key={preset.id}
+                className={`card card-hover flex flex-col p-5 ${owned ? accent.border : ''}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${accent.border} ${accent.bg}`}
+                    >
+                      <Icon className={`h-5 w-5 ${accent.text}`} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="text-[14px] font-bold text-white">{preset.name}</h3>
+                      <p className="mt-0.5 text-[11px] text-slate-400">{preset.buyer}</p>
+                    </div>
+                  </div>
+                  <EntitlementBadge locked={!owned} variant="purchased" />
+                </div>
+
+                <p className="mt-3 flex-1 text-[12px] leading-relaxed text-slate-300">
+                  {preset.summary}
+                </p>
+
+                <ul className="mt-3 flex flex-wrap gap-1.5">
+                  {preset.focus.map((item) => (
+                    <li
+                      key={item}
+                      className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[11px] text-slate-300"
+                    >
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[0.08] pt-4">
+                  <p className="font-mono text-[13px] font-semibold text-white">
+                    {formatPriceBand(preset)}
+                  </p>
+
+                  {owned ? (
+                    <Link
+                      to={`/modules/${preset.id}`}
+                      className="flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3.5 py-2 text-[12px] font-semibold text-slate-200 transition-colors hover:bg-white/[0.08] hover:text-white"
+                    >
+                      Open module
+                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setUpgradeTarget(preset)}
+                      className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 py-2 text-[12px] font-bold text-[#180f00] transition-colors hover:bg-amber-400 cursor-pointer"
+                    >
+                      Request pricing
+                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <UpgradeModal preset={upgradeTarget} onClose={() => setUpgradeTarget(null)} />
 
       {/* Stripe Payment Method & Integration Details */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -305,7 +295,7 @@ export const BillingPage: React.FC<BillingPageProps> = () => {
                   PO
                 </div>
                 <div>
-                  <p className="text-[13px] font-bold text-white">Government Grant Purchase Order</p>
+                  <p className="text-[13px] font-bold text-white">Government grant purchase order</p>
                   <p className="text-[11px] text-slate-400">USDA / State Grant Direct Invoicing (30-day terms)</p>
                 </div>
               </div>
@@ -329,7 +319,7 @@ export const BillingPage: React.FC<BillingPageProps> = () => {
           <div className="space-y-3.5">
             <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
+                <Webhook className="w-4 h-4 text-indigo-400 shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-[13px] font-bold text-white">Stripe Webhook Endpoint</p>
                   <p className="text-[11px] text-slate-300">Listening for customer.subscription.updated</p>
@@ -382,7 +372,7 @@ export const BillingPage: React.FC<BillingPageProps> = () => {
                   </td>
                   <td className="py-3 px-3 text-right">
                     <button
-                      onClick={() => alert(`Downloading Stripe Receipt PDF for ${inv.id}`)}
+                      onClick={() => setToastMessage(`Receipt ${inv.id} is downloading.`)}
                       className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
                       title="Download PDF Invoice"
                     >

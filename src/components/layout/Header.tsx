@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { Bell, Menu, ChevronDown, User, Settings, LogOut, RefreshCw, Share2, Check } from 'lucide-react';
+import { PresetSwitcher } from '../ui/PresetSwitcher';
+import { UpgradeModal } from '../ui/UpgradeModal';
+import { usePreset } from '../../hooks/usePreset';
 import { useNavigate } from 'react-router-dom';
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { CountyScopeSelector } from '../ui/CountyScopeSelector';
@@ -21,11 +24,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggl
     useDashboardFilters();
   const navigate = useNavigate();
   const connection = checkFirebaseConnectionStatus();
-  const [activePreset, setActivePreset] = useState("📊 Grant & Community Impact");
-  const [isPresetOpen, setIsPresetOpen] = useState(false);
-  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-  const [selectedLockedModule, setSelectedLockedModule] = useState("");
-  const [upgradeSubmitted, setUpgradeSubmitted] = useState(false);
+  const { pendingUpgrade, dismissUpgrade } = usePreset();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -53,7 +52,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggl
     <header className="sticky top-0 z-30 bg-[#0f1117]/80 backdrop-blur-xl border-b border-white/[0.06]">
       <div className="flex items-center justify-between px-5 sm:px-8 py-4 gap-3">
         {/* Left: Mobile menu + Page title */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex flex-1 items-center gap-3 min-w-0">
           <button
             type="button"
             onClick={onToggleSidebar}
@@ -99,65 +98,9 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggl
 
         {/* Right: Date range + Share + Notifications + User */}
         <div className="flex items-center gap-3 shrink-0">
-          {/* View Category & Subscription Tier Preset Switcher */}
-          <div className="relative hidden md:block">
-            <button
-              onClick={() => setIsPresetOpen(!isPresetOpen)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[12px] font-semibold hover:bg-emerald-500/20 transition-all cursor-pointer"
-            >
-              <span>{activePreset}</span>
-              <ChevronDown className="w-3.5 h-3.5 opacity-75" />
-            </button>
+          <PresetSwitcher className="hidden md:block" />
 
-            {isPresetOpen && (
-              <div className="absolute top-full left-0 mt-2 w-72 bg-[#161926] border border-white/10 rounded-2xl shadow-2xl p-2 z-50 text-[12px] space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 py-1">
-                  Active Subscription View Presets
-                </p>
-
-                <button
-                  onClick={() => { setActivePreset("📊 Grant & Community Impact"); setIsPresetOpen(false); }}
-                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-emerald-500/15 text-emerald-300 font-semibold text-left"
-                >
-                  <span>📊 Grant & Community Impact</span>
-                  <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded-full text-emerald-400">Unlocked</span>
-                </button>
-
-                <button
-                  onClick={() => { setSelectedLockedModule("🏥 SDOH Healthcare & Medicaid Compliance"); setIsUpgradeModalOpen(true); setIsPresetOpen(false); }}
-                  className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-white/[0.04] text-slate-300 text-left transition-colors"
-                >
-                  <span>🏥 SDOH Healthcare & Medicaid</span>
-                  <span className="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded-full text-amber-300 flex items-center gap-1">🔒 Locked</span>
-                </button>
-
-                <button
-                  onClick={() => { setSelectedLockedModule("📋 IRS CHNA Hospital Audit"); setIsUpgradeModalOpen(true); setIsPresetOpen(false); }}
-                  className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-white/[0.04] text-slate-300 text-left transition-colors"
-                >
-                  <span>📋 IRS CHNA Hospital Audit</span>
-                  <span className="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded-full text-amber-300 flex items-center gap-1">🔒 Locked</span>
-                </button>
-
-                <button
-                  onClick={() => { setSelectedLockedModule("🚨 Disaster & Emergency Logistics"); setIsUpgradeModalOpen(true); setIsPresetOpen(false); }}
-                  className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-white/[0.04] text-slate-300 text-left transition-colors"
-                >
-                  <span>🚨 Disaster & Emergency Logistics</span>
-                  <span className="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded-full text-amber-300 flex items-center gap-1">🔒 Locked</span>
-                </button>
-
-                <button
-                  onClick={() => { setSelectedLockedModule("🏢 Corporate CSR Sponsor Overview"); setIsUpgradeModalOpen(true); setIsPresetOpen(false); }}
-                  className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-white/[0.04] text-slate-300 text-left transition-colors"
-                >
-                  <span>🏢 Corporate CSR Sponsor View</span>
-                  <span className="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded-full text-amber-300 flex items-center gap-1">🔒 Locked</span>
-                </button>
-              </div>
-            )}
-          </div>
-          <div className="hidden xl:block">
+          <div className="hidden 2xl:block">
             <CountyScopeSelector
               assignedCounties={user.assignedCounties}
               regionLabel={user.region}
@@ -166,7 +109,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggl
             />
           </div>
 
-          <div className="hidden sm:block">
+          <div className="hidden xl:block">
             <DateRangePicker
               selected={dateRange}
               customRange={customRange}
@@ -179,7 +122,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggl
           <button
             type="button"
             onClick={handleShareView}
-            className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-slate-200 hover:text-white hover:bg-white/[0.08] transition-all text-[12px] font-medium cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+            className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-slate-200 hover:text-white hover:bg-white/[0.08] transition-all text-[12px] font-medium cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
             aria-label="Copy a link to this view, including the current filters"
           >
             {copiedLink ? (
@@ -280,7 +223,8 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggl
       {/* On narrow screens the date controls get their own scrollable row —
           previously they were hidden entirely, so mobile users could not
           change the date range at all. */}
-      <div className="xl:hidden px-5 sm:px-8 pb-3 flex items-center gap-3 overflow-x-auto">
+      <div className="2xl:hidden px-5 sm:px-8 pb-3 flex items-center gap-3 overflow-x-auto">
+        <PresetSwitcher className="md:hidden shrink-0" />
         <CountyScopeSelector
           assignedCounties={user.assignedCounties}
           regionLabel={user.region}
@@ -288,7 +232,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggl
           onChange={setCountyScope}
           className="shrink-0"
         />
-        <div className="sm:hidden shrink-0">
+        <div className="xl:hidden shrink-0">
           <DateRangePicker
             selected={dateRange}
             customRange={customRange}
@@ -298,58 +242,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggl
           />
         </div>
       </div>
-          {/* Upgrade Modal for Locked Feature Presets */}
-      {isUpgradeModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#161926] border border-white/10 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl relative">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <span className="text-xs font-bold text-amber-400 uppercase tracking-wider bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
-                🔒 Add-On Module Upgrade
-              </span>
-              <button onClick={() => setIsUpgradeModalOpen(false)} className="text-slate-400 hover:text-white text-lg">✕</button>
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-lg font-bold text-white">{selectedLockedModule}</h3>
-              <p className="text-[13px] text-slate-300 leading-relaxed">
-                This premium analytics module is locked under your current Tier 2 account. Unlock real-time compliance reporting, SDOH audit feeds, and automated grant exports.
-              </p>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-[12px] space-y-1.5 text-slate-300">
-              <div className="flex justify-between">
-                <span>Invoicing Options:</span>
-                <span className="font-semibold text-emerald-400">QuickBooks Net-30 / Stripe</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Contract Type:</span>
-                <span className="font-semibold text-white">Grant-Funded Add-On</span>
-              </div>
-            </div>
-
-            {upgradeSubmitted ? (
-              <div className="p-3 rounded-xl bg-emerald-500/20 text-emerald-300 text-center font-semibold text-xs border border-emerald-500/30">
-                ✅ Upgrade Request Sent! Our account manager will issue your Net-30 invoice.
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 pt-2">
-                <button
-                  onClick={() => setUpgradeSubmitted(true)}
-                  className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[13px] rounded-xl transition-all shadow-lg cursor-pointer"
-                >
-                  Request Module Upgrade
-                </button>
-                <button
-                  onClick={() => setIsUpgradeModalOpen(false)}
-                  className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 font-semibold text-[13px] rounded-xl transition-colors cursor-pointer"
-                >
-                  Close
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <UpgradeModal preset={pendingUpgrade} onClose={dismissUpgrade} />
     </header>
   );
 };

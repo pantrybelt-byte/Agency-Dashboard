@@ -9,6 +9,10 @@ interface MetricCardProps {
   icon: React.ReactNode;
   glowClass?: string;
   animationDelay?: string;
+  /** Monospace the value — exact dollar figures and coordinates. */
+  mono?: boolean;
+  /** Marks a figure as modelled rather than measured. */
+  illustrative?: boolean;
 }
 
 export const MetricCard: React.FC<MetricCardProps> = ({
@@ -19,16 +23,32 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   icon,
   glowClass = '',
   animationDelay = '',
+  mono = false,
+  illustrative = false,
 }) => {
   const trendColor = trend && trend > 0 ? 'text-emerald-400' : trend && trend < 0 ? 'text-red-400' : 'text-slate-400';
   const TrendIcon = trend && trend > 0 ? TrendingUp : trend && trend < 0 ? TrendingDown : Minus;
 
   return (
-    <div className={`card p-5 animate-fade-in-up ${glowClass} ${animationDelay}`}>
+    <div className={`card card-hover p-5 animate-fade-in-up ${glowClass} ${animationDelay}`}>
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-[13px] text-slate-400 font-medium">{label}</p>
-          <p className="text-2xl font-bold text-white mt-2 tracking-tight">
+          <p className="flex items-center gap-1.5 text-[13px] font-medium text-slate-400">
+            {label}
+            {illustrative && (
+              <span
+                title="Modelled figure — no source system connected yet"
+                className="rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-amber-300"
+              >
+                Sample
+              </span>
+            )}
+          </p>
+          <p
+            className={`mt-2 text-2xl font-bold tracking-tight text-white tabular-nums ${
+              mono ? 'font-mono text-xl' : ''
+            }`}
+          >
             {typeof value === 'number' ? value.toLocaleString() : value}
           </p>
           {trend !== undefined && (

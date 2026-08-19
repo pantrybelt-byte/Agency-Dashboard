@@ -1,5 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { VIEW_PRESETS } from '../../config/presets';
+import { usePreset } from '../../hooks/usePreset';
 import {
   LayoutDashboard,
   Map,
@@ -12,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
+  Lock,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -29,6 +32,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   mobileOpen,
   onCloseMobile,
 }) => {
+  const { isUnlocked } = usePreset();
+
   const analyticsNav = [
     { label: 'Overview', path: '/', icon: LayoutDashboard },
     { label: 'Demographics', path: '/demographics', icon: Users },
@@ -44,8 +49,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { label: 'Reports & Export', path: '/reports', icon: FileBarChart2 },
   ];
 
+  // Purchasable modules. Locked ones stay visible on purpose — hiding what an
+  // agency has not bought means they never discover it exists.
+  const moduleNav = VIEW_PRESETS.filter((preset) => preset.access === 'add-on').map((preset) => ({
+    label: preset.shortName,
+    path: `/modules/${preset.id}`,
+    icon: preset.icon,
+    locked: !isUnlocked(preset.id),
+  }));
+
   const settingsNav = [
-    { label: 'Billing & Subscription', path: '/billing', icon: CreditCard },
+    { label: 'Plan & Modules', path: '/billing', icon: CreditCard },
     { label: 'Settings', path: '/settings', icon: Settings },
   ];
 
@@ -57,19 +71,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   `;
 
-  const renderLink = (item: { label: string; path: string; icon: React.ElementType }) => (
+  const renderLink = (item: {
+    label: string;
+    path: string;
+    icon: React.ElementType;
+    locked?: boolean;
+  }) => (
     <li key={item.path}>
       <NavLink
         to={item.path}
         end={item.path === '/'}
         onClick={onCloseMobile}
         // When collapsed the label is not rendered, so it has to come from
-        // aria-label instead — otherwise the link is just an icon.
-        aria-label={isCollapsed ? item.label : undefined}
+        // aria-label instead — otherwise the link is just an icon. The lock
+        // state rides along in the name rather than being colour-only.
+        aria-label={
+          isCollapsed || item.locked
+            ? `${item.label}${item.locked ? ', locked add-on module' : ''}`
+            : undefined
+        }
         className={linkClasses}
       >
         <item.icon className="w-[18px] h-[18px] shrink-0 opacity-90" aria-hidden="true" />
         {!isCollapsed && <span className="truncate">{item.label}</span>}
+        {!isCollapsed && item.locked && (
+          <Lock className="ml-auto h-3 w-3 shrink-0 text-amber-400/80" aria-hidden="true" />
+        )}
       </NavLink>
     </li>
   );
@@ -80,7 +107,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
    */
   const renderSection = (
     text: string,
-    items: { label: string; path: string; icon: React.ElementType }[],
+    items: { label: string; path: string; icon: React.ElementType; locked?: boolean }[],
   ) => {
     const headingId = `sidebar-section-${text.toLowerCase()}`;
     return (
@@ -159,6 +186,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <ul className="space-y-0.5 list-none p-0 m-0">
               {renderSection('Analytics', analyticsNav)}
               {renderSection('Insights', insightsNav)}
+              {renderSection('Modules', moduleNav)}
               {renderSection('Reports', reportsNav)}
               {renderSection('Account', settingsNav)}
             </ul>

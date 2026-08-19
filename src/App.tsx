@@ -2,6 +2,7 @@ import { lazy } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthProvider';
 import { DashboardFilterProvider } from './context/DashboardFilterProvider';
+import { PresetProvider } from './context/PresetProvider';
 import { RequireAuth } from './components/routing/RequireAuth';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { LoginPage } from './pages/LoginPage';
@@ -26,6 +27,21 @@ const MostRequestedPage = lazy(() =>
 const ReportsPage = lazy(() => import('./pages/ReportsPage').then((m) => ({ default: m.ReportsPage })));
 const BillingPage = lazy(() => import('./pages/BillingPage').then((m) => ({ default: m.BillingPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+
+// Purchasable analytics modules. Each renders its own gate, so an agency
+// without the entitlement still gets a route and a preview rather than a 404.
+const SdohModulePage = lazy(() =>
+  import('./pages/modules/SdohModulePage').then((m) => ({ default: m.SdohModulePage })),
+);
+const ChnaModulePage = lazy(() =>
+  import('./pages/modules/ChnaModulePage').then((m) => ({ default: m.ChnaModulePage })),
+);
+const CsrModulePage = lazy(() =>
+  import('./pages/modules/CsrModulePage').then((m) => ({ default: m.CsrModulePage })),
+);
+const DisasterModulePage = lazy(() =>
+  import('./pages/modules/DisasterModulePage').then((m) => ({ default: m.DisasterModulePage })),
+);
 
 interface AttemptedLocation {
   pathname: string;
@@ -56,9 +72,11 @@ function LoginRoute() {
 function ProtectedShell() {
   return (
     <RequireAuth>
-      <DashboardFilterProvider>
-        <DashboardLayout />
-      </DashboardFilterProvider>
+      <PresetProvider>
+        <DashboardFilterProvider>
+          <DashboardLayout />
+        </DashboardFilterProvider>
+      </PresetProvider>
     </RequireAuth>
   );
 }
@@ -76,6 +94,10 @@ export default function App() {
             <Route path="/interactions" element={<PantryInteractionsPage />} />
             <Route path="/most-requested" element={<MostRequestedPage />} />
             <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/modules/sdoh" element={<SdohModulePage />} />
+            <Route path="/modules/chna" element={<ChnaModulePage />} />
+            <Route path="/modules/csr" element={<CsrModulePage />} />
+            <Route path="/modules/disaster" element={<DisasterModulePage />} />
             <Route path="/billing" element={<BillingPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

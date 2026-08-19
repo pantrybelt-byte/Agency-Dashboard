@@ -20,37 +20,55 @@
 }
 
 /* ============================================
-   Dark Executive Theme — Card System
+   Card System — dark glassmorphism
+   One surface colour, one border weight, one radius. Every panel in the
+   product is this card or a variant of it; nothing rolls its own.
    ============================================ */
 
 .card {
-  background: #1a1d2e;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  background: #161926;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .card-glass {
-  background: rgba(26, 29, 46, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(22, 25, 38, 0.72);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.36);
 }
 
 .card-hover {
-  background: #1a1d2e;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  background: #161926;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .card-hover:hover {
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   transform: translateY(-1px);
+}
+
+/* A hairline of the module's accent along the top edge, so a preset switch
+   is legible at a glance rather than only in the numbers. */
+.card-accent {
+  position: relative;
+  overflow: hidden;
+}
+
+.card-accent::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, currentColor, transparent);
+  opacity: 0.5;
 }
 
 /* ============================================
@@ -73,6 +91,10 @@
   box-shadow: 0 0 20px rgba(59, 130, 246, 0.08), 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
+.metric-glow-rose {
+  box-shadow: 0 0 20px rgba(244, 63, 94, 0.08), 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
 /* ============================================
    Form Controls — Dark Theme
    ============================================ */
@@ -90,9 +112,9 @@ select {
   font-size: 13px;
   line-height: 1.4;
   color: #f1f5f9;
-  background-color: #1e2235;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  background-color: #1b1f30;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.625rem;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 

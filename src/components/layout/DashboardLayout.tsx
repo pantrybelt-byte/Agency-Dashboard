@@ -20,8 +20,24 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/most-requested': { title: 'Most Requested Items', subtitle: 'Item demand intelligence' },
   '/reports': { title: 'Reports & Export', subtitle: 'Generate and download reports' },
   '/billing': {
-    title: 'Billing & Subscription',
-    subtitle: 'Manage agency plan, Stripe customer portal & invoices',
+    title: 'Plan & Modules',
+    subtitle: 'Base platform, purchased analytics modules, and invoicing',
+  },
+  '/modules/sdoh': {
+    title: 'SDOH Health & Medicaid Audit',
+    subtitle: 'Member ZIP vulnerability, HEDIS screening, closed-loop referrals',
+  },
+  '/modules/chna': {
+    title: 'IRS CHNA Hospital Compliance',
+    subtitle: 'Service radius assessment and Form 501(r) investment log',
+  },
+  '/modules/csr': {
+    title: 'Corporate CSR Sponsor Overview',
+    subtitle: 'Co-branded reach and sponsored county growth',
+  },
+  '/modules/disaster': {
+    title: 'Disaster & Emergency Logistics',
+    subtitle: 'Live POD status, stockout red zones, and the SOS stream',
   },
   '/settings': { title: 'Settings', subtitle: 'Agency account & threshold alert configuration' },
 };

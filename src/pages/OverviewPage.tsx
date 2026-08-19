@@ -3,7 +3,10 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts';
-import { Users, Store, Package, AlertTriangle, TrendingUp, Download, ShieldCheck, X, GitCompare } from 'lucide-react';
+import { TrendingUp, Download, X, GitCompare, Info } from 'lucide-react';
+import { ACCENTS, type PresetMetrics } from '../config/presets';
+import { usePreset } from '../hooks/usePreset';
+import { EntitlementBadge } from '../components/ui/StatusBadge';
 import { MetricCard } from '../components/ui/MetricCard';
 import { ChartCard } from '../components/ui/ChartCard';
 import { SegmentFilter } from '../components/ui/SegmentFilter';
@@ -29,6 +32,8 @@ import {
   mockDistributionByType,
 } from '../data/mockData';
 import { exportToCSV } from '../utils/csvExport';
+import { buildModuleExport } from '../utils/moduleExports';
+import { mockFoodDesertZones } from '../data/mockData';
 import { useDashboardFilters } from '../hooks/useDashboardFilters';
 
 
@@ -56,6 +61,8 @@ export const OverviewPage: React.FC = () => {
     setDemographicSegment,
   } = useDashboardFilters();
   const { user } = useAuth();
+  const { preset } = usePreset();
+  const accent = ACCENTS[preset.accent];
 
   const { data: pantries, status, source, error } = useLiveData(subscribePantries, []);
 
@@ -114,8 +121,47 @@ export const OverviewPage: React.FC = () => {
     [scopedPantries],
   );
 
-  const displayFamilies = summary.totalFamiliesServed;
-  const displayItems = summary.totalItemsDistributed;
+  // One computation of the underlying figures; each preset selects and
+  // reframes them rather than recomputing its own.
+  const presetMetrics: PresetMetrics = useMemo(
+    () => ({
+      familiesServed: summary.totalFamiliesServed,
+      itemsDistributed: summary.totalItemsDistributed,
+      activePantries: summary.activePantries,
+      totalPantries: summary.totalPantries,
+      foodDesertScore:
+        countyScope === 'Lowndes' ? 18
+        : countyScope === 'Macon' ? 24
+        : countyScope === 'Dallas' ? 31
+        : countyScope === 'Montgomery' ? 58
+        : countyScope === 'Autauga' ? 62
+        : countyScope === 'Elmore' ? 71
+        : summary.avgFoodDesertScore,
+      countyCount: visibleCounties.length,
+      pantriesInScope: scopedPantries.length,
+      familiesTrend: summary.familiesServedTrend,
+      itemsTrend: summary.itemsDistributedTrend,
+      trendLabel: compareMode ? `vs previous ${resolved.dayCount} days` : 'vs last period',
+    }),
+    [summary, countyScope, visibleCounties.length, scopedPantries.length, compareMode, resolved.dayCount],
+  );
+
+  const presetKpis = useMemo(() => preset.buildKpis(presetMetrics), [preset, presetMetrics]);
+  const hasIllustrativeKpis = presetKpis.some((kpi) => kpi.illustrative);
+
+  // Each module produces its own file shape rather than one shared pantry
+  // list under five different names.
+  const handlePresetExport = () => {
+    const bundle = buildModuleExport(preset.id, {
+      pantries: scopedPantries,
+      zones: mockFoodDesertZones,
+      countyScope,
+      periodLabel: `${resolved.dayCount} days`,
+      agencyName: user?.organization ?? 'AccessBelt agency',
+      containsModelledFigures: hasIllustrativeKpis,
+    });
+    if (bundle.rows.length > 0) exportToCSV(bundle.filename, bundle.rows);
+  };
 
   const scopeDescription =
     countyScope === ALL_COUNTIES ? `${visibleCounties.length} assigned counties` : `${countyScope} County`;
@@ -145,79 +191,103 @@ export const OverviewPage: React.FC = () => {
             : `${countyScope} County has no reporting pantries. Widen the county scope in the header.`
         }
       >
-      {/* Executive Notice */}
+      {/* Preset masthead — identity, entitlement, and the primary export CTA */}
       {showBanner && (
-        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.08] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in-up">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-5 h-5" />
+        <section
+          aria-label={`${preset.name} view`}
+          className={`card-accent card animate-fade-in-up ${accent.text} p-5`}
+        >
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex min-w-0 items-start gap-3.5">
+              <span
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${accent.border} ${accent.bg}`}
+              >
+                <preset.icon className={`h-5 w-5 ${accent.text}`} aria-hidden="true" />
+              </span>
+
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-[15px] font-bold tracking-tight text-white">{preset.name}</h2>
+                  <EntitlementBadge
+                    locked={false}
+                    variant={preset.access === 'included' ? 'included' : 'purchased'}
+                  />
+                </div>
+
+                <p className="mt-1 text-[12px] text-slate-300">
+                  {scopedPantries.length} partner{' '}
+                  {scopedPantries.length === 1 ? 'pantry' : 'pantries'} across {scopeDescription}
+                  {demographicSegment !== 'all' && ` · ${segmentLabel(demographicSegment)} only`}.
+                </p>
+
+                <ul className="mt-2.5 flex flex-wrap gap-1.5">
+                  {preset.focus.map((item) => (
+                    <li
+                      key={item}
+                      className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[11px] text-slate-300"
+                    >
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
-            <div>
-              <p className="text-[13px] font-bold text-white">
-                {user?.region ?? 'Regional'} Executive Overview
-              </p>
-              <p className="text-[12px] text-slate-300">
-                {scopedPantries.length} partner{' '}
-                {scopedPantries.length === 1 ? 'pantry' : 'pantries'} across {scopeDescription}
-                {demographicSegment !== 'all' && ` · ${segmentLabel(demographicSegment)} only`}.
-              </p>
+
+            <div className="flex shrink-0 items-start gap-2">
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={handlePresetExport}
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-[12px] font-bold text-[#0b0d14] transition-colors cursor-pointer ${accent.solid} ${accent.solidHover}`}
+                >
+                  <preset.exportIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="text-left">{preset.exportLabel}</span>
+                </button>
+                <p className="mt-1.5 max-w-[16rem] text-[11px] text-slate-400">{preset.exportNote}</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowBanner(false)}
+                aria-label="Dismiss the executive overview notice"
+                className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white cursor-pointer"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-            <button
-              onClick={handleExportTopPantriesCSV}
-              className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 text-[12px] font-semibold hover:bg-emerald-500/25 transition-colors cursor-pointer flex items-center gap-1.5"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Export Executive CSV
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowBanner(false)}
-              aria-label="Dismiss the executive overview notice"
-              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
+        </section>
       )}
 
       <SegmentFilter value={demographicSegment} onChange={setDemographicSegment} />
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          label="Families Served"
-          value={displayFamilies}
-          trend={summary.familiesServedTrend}
-          trendLabel={compareMode ? `vs previous ${resolved.dayCount} days` : 'vs last period'}
-          icon={<Users className="w-5 h-5 text-emerald-400" />}
-          glowClass="metric-glow-emerald"
-        />
-        <MetricCard
-          label="Active Pantries in Scope"
-          value={`${summary.activePantries} / ${summary.totalPantries}`}
-          icon={<Store className="w-5 h-5 text-indigo-400" />}
-          glowClass="metric-glow-indigo"
-          animationDelay="delay-100"
-        />
-        <MetricCard
-          label="Items Distributed"
-          value={displayItems}
-          trend={summary.itemsDistributedTrend}
-          trendLabel={compareMode ? `vs previous ${resolved.dayCount} days` : 'vs last period'}
-          icon={<Package className="w-5 h-5 text-amber-400" />}
-          glowClass="metric-glow-amber"
-          animationDelay="delay-200"
-        />
-        <MetricCard
-          label="Food Desert Score"
-          value={`${countyScope === 'Lowndes' ? 18 : countyScope === 'Macon' ? 24 : countyScope === 'Dallas' ? 31 : countyScope === 'Montgomery' ? 58 : countyScope === 'Autauga' ? 62 : countyScope === 'Elmore' ? 71 : summary.avgFoodDesertScore}/100`}
-          icon={<AlertTriangle className="w-5 h-5 text-red-400" />}
-          glowClass="metric-glow-blue"
-          animationDelay="delay-300"
-        />
+      {hasIllustrativeKpis && (
+        <p className="flex items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-3.5 py-2.5 text-[11px] text-amber-200/90">
+          <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            Figures marked <span className="font-semibold">Sample</span> in this view are modelled
+            from pantry activity and are not yet drawn from a source system. They are for layout
+            and demonstration only — do not cite them in a filing or audit.
+          </span>
+        </p>
+      )}
+
+      {/* KPI row — the preset decides which four figures this buyer cares about */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {presetKpis.map((kpi, index) => (
+          <MetricCard
+            key={kpi.label}
+            label={kpi.label}
+            value={kpi.value}
+            trend={kpi.trend}
+            trendLabel={kpi.trendLabel}
+            mono={kpi.mono}
+            illustrative={kpi.illustrative}
+            icon={<kpi.icon className={`w-5 h-5 ${accent.text}`} aria-hidden="true" />}
+            glowClass={kpi.glow}
+            animationDelay={['', 'delay-100', 'delay-200', 'delay-300'][index] ?? ''}
+          />
+        ))}
       </div>
 
       {/* Main Charts Row */}

@@ -3,7 +3,21 @@
 // ============================================
 
 export type UserRole = 'Executive Director' | 'Regional Coordinator' | 'Data Analyst' | 'Field Inspector';
-export type SubscriptionTier = 'community' | 'pro' | 'enterprise';
+
+/**
+ * Purchasable analytics modules.
+ *
+ * These replaced the old community/pro/enterprise subscription tiers. Tiers
+ * priced capacity; modules price outcomes, which is how these buyers actually
+ * procure — a hospital buys a CHNA report, not a seat licence. The tier model
+ * also produced contradictions the module model cannot: under it, the $5k
+ * Corporate CSR view required an $18k/yr plan to unlock, and a single
+ * Enterprise subscription unlocked three separately-priced modules at once.
+ *
+ * `grant` is not listed here because it is included in the base platform and
+ * therefore never needs to be purchased. See BASE_PLATFORM in config/presets.
+ */
+export type ModuleId = 'sdoh' | 'chna' | 'csr' | 'disaster';
 
 export interface AgencyUser {
   id: string;
@@ -11,7 +25,8 @@ export interface AgencyUser {
   email: string;
   organization: string;
   role: UserRole;
-  subscriptionTier?: SubscriptionTier;
+  /** Modules this agency has purchased. Absent means base platform only. */
+  entitlements?: ModuleId[];
   avatarUrl?: string;
   region: string;
   assignedCounties: string[];
