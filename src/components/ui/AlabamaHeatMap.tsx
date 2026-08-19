@@ -18,6 +18,9 @@ interface AlabamaHeatMapProps {
   counties?: AlabamaCountyData[];
   selectedCountyId?: string | null;
   onSelectCounty?: (county: AlabamaCountyData) => void;
+  assignedCountyId?: string;
+  isRegionalUnlocked?: boolean;
+  onLockedCountyClick?: (county: AlabamaCountyData) => void;
 }
 
 type ShadingMetric = 'foodAccessScore' | 'povertyRate' | 'nearestPantryMiles';
@@ -129,6 +132,9 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({
   counties,
   selectedCountyId,
   onSelectCounty,
+  assignedCountyId = "montgomery",
+  isRegionalUnlocked = false,
+  onLockedCountyClick,
 }) => {
   // Never render an empty map: an in-flight subscription should still show the
   // state, just with the bundled figures until live ones arrive.
@@ -415,7 +421,14 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({
                   aria-label={describeCounty(county)}
                   aria-pressed={isSelected}
                   aria-hidden={!isMatch}
-                  onClick={() => onSelectCounty?.(county)}
+                  onClick={() => {
+                    const isLocked = !isRegionalUnlocked && county.id !== assignedCountyId;
+                    if (isLocked) {
+                      onLockedCountyClick?.(county);
+                    } else {
+                      onSelectCounty?.(county);
+                    }
+                  }}
                   onKeyDown={(event) => handleKeyDown(event, county)}
                   onFocus={() => setFocusedCountyId(county.id)}
                   onBlur={() => setFocusedCountyId((current) => (current === county.id ? null : current))}

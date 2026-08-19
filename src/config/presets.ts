@@ -46,6 +46,13 @@ export type PresetId = 'grant' | ModuleId;
  * low and selling outcomes on top is the whole shape of the model — the Grant
  * view is what proves the data is worth paying for.
  */
+export const REGIONAL_PRO_PLATFORM = {
+  name: "Regional Pro — Multi-County & Statewide Access",
+  includes: "All 67 Alabama counties, multi-county demand comparison, predictive stockout alerts",
+  monthlyPrice: 1500,
+  annualPrice: 18_000,
+};
+
 export const BASE_PLATFORM = {
   name: 'AccessBelt Base Platform',
   includes: 'Grant & Community Impact view, all counties assigned to your agency',
