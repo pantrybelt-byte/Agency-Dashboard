@@ -12,10 +12,9 @@ import { ChartCard } from '../../components/ui/ChartCard';
 import { MetricCard } from '../../components/ui/MetricCard';
 import { DataTable } from '../../components/ui/DataTable';
 import { ModuleShell, SampleNotice } from './ModuleShell';
-import { mockFoodDesertZones, mockPantryMetrics } from '../../data/mockData';
+import { useModuleData } from './useModuleData';
 import { buildModuleExport } from '../../utils/moduleExports';
-import { exportToCSV } from '../../utils/csvExport';
-import { useAuth } from '../../hooks/useAuth';
+import { exportBundleToCSV } from '../../utils/csvExport';
 
 type PodStatus = 'Operational' | 'Limited' | 'Offline';
 
@@ -30,17 +29,20 @@ const STATUS_STYLES: Record<PodStatus, string> = {
   Offline: 'border-rose-500/30 bg-rose-500/10 text-rose-300',
 };
 
+const plainCounty = (name: string) => name.replace(/\s+County$/, '');
+
 export const DisasterModulePage: React.FC = () => {
-  const { user } = useAuth();
+  const { pantries, counties, scopeLabel, periodLabel, status: dataStatus, error, exportContext } =
+    useModuleData();
   const [filter, setFilter] = useState<'all' | PodStatus>('all');
 
   const pods = useMemo(
     () =>
-      mockPantryMetrics.map((pantry) => ({
+      pantries.map((pantry) => ({
         ...pantry,
         status: podStatus(pantry.isActive, pantry.avgDailyVisits),
       })),
-    [],
+    [pantries],
   );
 
   const visible = useMemo(
@@ -53,14 +55,19 @@ export const DisasterModulePage: React.FC = () => {
   const limited = pods.filter((p) => p.status === 'Limited').length;
 
   // Red zones: counties whose only sites are offline or limited.
-  const redZones = useMemo(
-    () =>
-      mockFoodDesertZones.filter((zone) => {
-        const sites = pods.filter((p) => p.county === zone.county);
-        return sites.length > 0 && sites.every((s) => s.status !== 'Operational');
-      }),
-    [pods],
-  );
+  const redZones = useMemo(() => {
+    const operationalByCounty = new Map<string, { total: number; operational: number }>();
+    for (const pod of pods) {
+      const entry = operationalByCounty.get(pod.county) ?? { total: 0, operational: 0 };
+      entry.total += 1;
+      if (pod.status === 'Operational') entry.operational += 1;
+      operationalByCounty.set(pod.county, entry);
+    }
+    return counties.filter((county) => {
+      const entry = operationalByCounty.get(plainCounty(county.name));
+      return entry !== undefined && entry.total > 0 && entry.operational === 0;
+    });
+  }, [pods, counties]);
 
   const sosStream = useMemo(
     () =>
@@ -79,19 +86,26 @@ export const DisasterModulePage: React.FC = () => {
   );
 
   const handleExport = () => {
-    const bundle = buildModuleExport('disaster', {
-      pantries: visible,
-      zones: mockFoodDesertZones,
-      countyScope: filter === 'all' ? 'all-pods' : filter.toLowerCase(),
-      periodLabel: 'live',
-      agencyName: user?.organization ?? 'Emergency management',
-      containsModelledFigures: true,
-    });
-    exportToCSV(bundle.filename, bundle.rows);
+    const bundle = buildModuleExport(
+      'disaster',
+      exportContext({
+        pantries: visible,
+        scopeSuffix: filter === 'all' ? 'AllPODs' : filter,
+        containsModelledFigures: true,
+      }),
+    );
+    exportBundleToCSV(bundle);
   };
 
   return (
-    <ModuleShell moduleId="disaster" onExport={handleExport}>
+    <ModuleShell
+      moduleId="disaster"
+      onExport={handleExport}
+      scopeLabel={scopeLabel}
+      periodLabel={periodLabel}
+      status={dataStatus}
+      error={error}
+    >
       <div className="space-y-5">
         <SampleNotice what="The SOS request stream and POD status, which are derived from pantry activity rather than a live incident feed" />
 
@@ -141,7 +155,7 @@ export const DisasterModulePage: React.FC = () => {
                   key={zone.id}
                   className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-[12px] font-semibold text-rose-200"
                 >
-                  {zone.county} County
+                  {zone.name}
                   <span className="ml-2 font-mono text-[11px] text-rose-300/80">
                     pop {zone.population.toLocaleString()}
                   </span>

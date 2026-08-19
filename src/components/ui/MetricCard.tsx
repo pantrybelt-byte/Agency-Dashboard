@@ -13,6 +13,15 @@ interface MetricCardProps {
   mono?: boolean;
   /** Marks a figure as modelled rather than measured. */
   illustrative?: boolean;
+  /**
+   * `lead` promotes the figure a view exists to show.
+   *
+   * Every preset declares its KPIs in priority order, but all four rendered at
+   * identical weight, so the five buyer views differed in content and not in
+   * shape. Promoting the first gives each view a silhouette you can recognise
+   * before reading a word of it.
+   */
+  emphasis?: 'default' | 'lead';
 }
 
 export const MetricCard: React.FC<MetricCardProps> = ({
@@ -25,12 +34,18 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   animationDelay = '',
   mono = false,
   illustrative = false,
+  emphasis = 'default',
 }) => {
   const trendColor = trend && trend > 0 ? 'text-emerald-400' : trend && trend < 0 ? 'text-red-400' : 'text-slate-400';
   const TrendIcon = trend && trend > 0 ? TrendingUp : trend && trend < 0 ? TrendingDown : Minus;
+  const isLead = emphasis === 'lead';
 
   return (
-    <div className={`card card-hover p-5 animate-fade-in-up ${glowClass} ${animationDelay}`}>
+    <div
+      className={`card card-hover animate-fade-in-up ${glowClass} ${animationDelay} ${
+        isLead ? 'p-6 sm:col-span-2 border-white/[0.14]' : 'p-5'
+      }`}
+    >
       <div className="flex items-start justify-between">
         <div>
           <p className="flex items-center gap-1.5 text-[13px] font-medium text-slate-400">
@@ -45,9 +60,9 @@ export const MetricCard: React.FC<MetricCardProps> = ({
             )}
           </p>
           <p
-            className={`mt-2 text-2xl font-bold tracking-tight text-white tabular-nums ${
-              mono ? 'font-mono text-xl' : ''
-            }`}
+            className={`mt-2 font-bold tracking-tight text-white tabular-nums ${
+              isLead ? 'text-4xl' : 'text-2xl'
+            } ${mono ? (isLead ? 'font-mono text-3xl' : 'font-mono text-xl') : ''}`}
           >
             {typeof value === 'number' ? value.toLocaleString() : value}
           </p>
@@ -63,7 +78,11 @@ export const MetricCard: React.FC<MetricCardProps> = ({
             </div>
           )}
         </div>
-        <div className="w-10 h-10 rounded-xl bg-white/[0.05] flex items-center justify-center shrink-0">
+        <div
+          className={`rounded-xl bg-white/[0.05] flex items-center justify-center shrink-0 ${
+            isLead ? 'w-12 h-12' : 'w-10 h-10'
+          }`}
+        >
           {icon}
         </div>
       </div>

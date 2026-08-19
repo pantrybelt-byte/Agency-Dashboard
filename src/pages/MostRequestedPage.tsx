@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -6,7 +6,11 @@ import {
 import { TrendingUp, TrendingDown, Minus, Filter, ArrowUpDown, Download, Search } from 'lucide-react';
 import { ChartCard } from '../components/ui/ChartCard';
 import { DataTable } from '../components/ui/DataTable';
-import { mockRequestedItems, mockCategoryBreakdown } from '../data/mockData';
+import { DataStateBoundary } from '../components/ui/DataStateBoundary';
+import { combineStatus, useCountyRollups, useItemCatalogue } from '../hooks/useDashboardData';
+import { useDashboardFilters } from '../hooks/useDashboardFilters';
+import { categoryBreakdownFor, requestedItemsFor } from '../utils/analytics';
+import { ALL_COUNTIES } from '../utils/scoping';
 import { exportToCSV } from '../utils/csvExport';
 
 const trendIcons = {
@@ -51,27 +55,54 @@ export const MostRequestedPage: React.FC = () => {
   const [sortBy, setSortBy] = useState<'requestCount' | 'trendPercentage'>('requestCount');
   const [searchItem, setSearchItem] = useState('');
 
-  const categories = ['all', ...new Set(mockRequestedItems.map(i => i.category))];
+  const { countyScope, resolved } = useDashboardFilters();
+  const rollups = useCountyRollups();
+  const catalogue = useItemCatalogue();
+  const { status, error } = combineStatus(rollups, catalogue);
 
-  const filteredItems = mockRequestedItems
-    .filter(item => (categoryFilter === 'all' || item.category === categoryFilter) &&
-      item.name.toLowerCase().includes(searchItem.toLowerCase())
-    )
-    .sort((a, b) => {
-      if (sortBy === 'requestCount') return b.requestCount - a.requestCount;
-      return Math.abs(b.trendPercentage) - Math.abs(a.trendPercentage);
-    });
+  /**
+   * Demand for the counties and days in scope.
+   *
+   * The count, the trend, the percentage and the sparkline all come out of the
+   * same series now. They used to be four independent literals in the
+   * catalogue, free to disagree with each other and with the selected period.
+   */
+  const items = useMemo(
+    () => requestedItemsFor(catalogue.data, rollups.data),
+    [catalogue.data, rollups.data],
+  );
+
+  const categoryBreakdown = useMemo(
+    () => categoryBreakdownFor(rollups.data.current),
+    [rollups.data],
+  );
+
+  const categories = useMemo(() => ['all', ...new Set(items.map((i) => i.category))], [items]);
+
+  const filteredItems = useMemo(() => {
+    const term = searchItem.toLowerCase();
+    return items
+      .filter(
+        (item) =>
+          (categoryFilter === 'all' || item.category === categoryFilter) &&
+          item.name.toLowerCase().includes(term),
+      )
+      .sort((a, b) => {
+        if (sortBy === 'requestCount') return b.requestCount - a.requestCount;
+        return Math.abs(b.trendPercentage) - Math.abs(a.trendPercentage);
+      });
+  }, [items, categoryFilter, searchItem, sortBy]);
 
   const top15 = filteredItems.slice(0, 15);
 
   const handleExportCSV = () => {
-    exportToCSV('Most_Requested_Items_Intelligence', filteredItems, [
+    exportToCSV(`Item_Demand_${countyScope === ALL_COUNTIES ? 'AllAssigned' : countyScope}`, filteredItems, [
       { key: 'name', label: 'Item Name' },
       { key: 'category', label: 'Category' },
       { key: 'requestCount', label: 'Request Count' },
       { key: 'trend', label: 'Trend Direction' },
-      { key: 'trendPercentage', label: 'Trend Percentage (%)' },
-      { key: 'lastRequested', label: 'Last Requested' },
+      { key: 'trendPercentage', label: 'Change vs Previous Period (%)' },
+      { key: 'lastRequested', label: 'Last Reported Day' },
     ]);
   };
 
@@ -109,6 +140,19 @@ export const MostRequestedPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <DataStateBoundary
+        status={status}
+        error={error}
+        source={rollups.source}
+        isEmpty={status === 'ready' && items.length === 0}
+        emptyTitle="No item demand in scope"
+        emptyMessage={
+          countyScope === ALL_COUNTIES
+            ? 'No items were requested across your counties in this period.'
+            : `No items were requested in ${countyScope} County during this period.`
+        }
+        skeletonRows={4}
+      >
       {/* Filters & Actions */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-wrap">
@@ -150,7 +194,7 @@ export const MostRequestedPage: React.FC = () => {
         {/* Top 15 Horizontal Bar */}
         <ChartCard
           title="Top 15 Most Requested"
-          subtitle={categoryFilter === 'all' ? 'All categories' : categoryFilter}
+          subtitle={`${categoryFilter === 'all' ? 'All categories' : categoryFilter} · ${resolved.label}`}
           className="lg:col-span-2"
           dataTable={{
             columns: ['Item', 'Category', 'Requests'],
@@ -201,14 +245,14 @@ export const MostRequestedPage: React.FC = () => {
           subtitle="Distribution of total items"
           dataTable={{
             columns: ['Category', 'Items'],
-            rows: mockCategoryBreakdown.map((entry) => [entry.category, entry.value]),
+            rows: categoryBreakdown.map((entry) => [entry.category, entry.value]),
           }}
         >
           <div className="h-[220px] flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={mockCategoryBreakdown}
+                  data={categoryBreakdown}
                   cx="50%"
                   cy="50%"
                   innerRadius={55}
@@ -216,7 +260,7 @@ export const MostRequestedPage: React.FC = () => {
                   paddingAngle={3}
                   dataKey="value"
                 >
-                  {mockCategoryBreakdown.map((entry, index) => (
+                  {categoryBreakdown.map((entry, index) => (
                     <Cell key={index} fill={entry.color} stroke="transparent" />
                   ))}
                 </Pie>
@@ -234,7 +278,7 @@ export const MostRequestedPage: React.FC = () => {
             </ResponsiveContainer>
           </div>
           <div className="flex flex-wrap gap-2 justify-center mt-2">
-            {mockCategoryBreakdown.map(item => (
+            {categoryBreakdown.map(item => (
               <div key={item.category} className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
                 <span className="text-[10px] text-slate-400">{item.category}</span>
@@ -353,6 +397,7 @@ export const MostRequestedPage: React.FC = () => {
           ]}
         />
       </ChartCard>
+      </DataStateBoundary>
     </div>
   );
 };

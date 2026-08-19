@@ -75,7 +75,17 @@ export const DashboardLayout = () => {
           onToggleSidebar={() => setMobileSidebarOpen(true)}
         />
 
-        <main id="main-content" tabIndex={-1} className="flex-1 p-5 sm:p-8 max-w-[1750px] w-full mx-auto">
+        {/* `overflow-x-clip` is the backstop that keeps the page body from ever
+            scrolling sideways on a phone. Wide content — tables, charts — gets
+            its own `overflow-x-auto` container and still scrolls inside the
+            card; what this prevents is one of them dragging the whole document
+            with it. `clip` rather than `hidden` so the sticky header keeps
+            working. */}
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex-1 overflow-x-clip p-5 sm:p-8 max-w-[1750px] w-full mx-auto"
+        >
           {/* Paper-only masthead. The screen header is hidden when printing,
               so without this a printed report carries no provenance. */}
           <div className="print-header mb-6 pb-4 border-b border-slate-300">

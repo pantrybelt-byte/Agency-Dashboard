@@ -13,71 +13,85 @@ import { ChartCard } from '../../components/ui/ChartCard';
 import { MetricCard } from '../../components/ui/MetricCard';
 import { DataTable } from '../../components/ui/DataTable';
 import { ModuleShell, SampleNotice } from './ModuleShell';
-import { mockFoodDesertZones, mockPantryMetrics } from '../../data/mockData';
+import { useModuleData } from './useModuleData';
 import { buildModuleExport } from '../../utils/moduleExports';
-import { exportToCSV } from '../../utils/csvExport';
-import { useAuth } from '../../hooks/useAuth';
+import { exportBundleToCSV } from '../../utils/csvExport';
 
 const RADII = [10, 25, 50] as const;
 
 /** Rough miles-per-degree at Alabama's latitude; adequate for a service radius. */
 const MILES_PER_DEGREE = 69;
 
+/** Baptist Health Montgomery, the anchor for the demo service area. */
+const ANCHOR = { lat: 32.3792, lng: -86.3077 };
+
+const plainCounty = (name: string) => name.replace(/\s+County$/, '');
+
 export const ChnaModulePage: React.FC = () => {
-  const { user } = useAuth();
+  const { pantries, counties, scopeLabel, periodLabel, status, error, exportContext } = useModuleData();
   const [radius, setRadius] = useState<(typeof RADII)[number]>(25);
 
-  // Baptist Health Montgomery, as the anchor for the demo service area.
-  const anchor = { lat: 32.3792, lng: -86.3077 };
-
+  // The radius narrows *within* the counties already in scope. It cannot reach
+  // a pantry the agency is not assigned, which is the difference between a
+  // module control and a permissions boundary.
   const inRadius = useMemo(
     () =>
-      mockPantryMetrics.filter((pantry) => {
-        const dLat = (pantry.coordinates.lat - anchor.lat) * MILES_PER_DEGREE;
+      pantries.filter((pantry) => {
+        const dLat = (pantry.coordinates.lat - ANCHOR.lat) * MILES_PER_DEGREE;
         const dLng =
-          (pantry.coordinates.lng - anchor.lng) *
+          (pantry.coordinates.lng - ANCHOR.lng) *
           MILES_PER_DEGREE *
-          Math.cos((anchor.lat * Math.PI) / 180);
+          Math.cos((ANCHOR.lat * Math.PI) / 180);
         return Math.hypot(dLat, dLng) <= radius;
       }),
-    [radius, anchor.lat, anchor.lng],
+    [pantries, radius],
   );
 
-  const zonesInRadius = useMemo(
-    () => mockFoodDesertZones.filter((z) => inRadius.some((p) => p.county === z.county)),
-    [inRadius],
-  );
+  const countiesInRadius = useMemo(() => {
+    const names = new Set(inRadius.map((pantry) => pantry.county));
+    return counties.filter((county) => names.has(plainCounty(county.name)));
+  }, [counties, inRadius]);
 
-  const populationAssessed = zonesInRadius.reduce((sum, z) => sum + z.population, 0);
+  const populationAssessed = countiesInRadius.reduce((sum, c) => sum + c.population, 0);
   const familiesReached = inRadius.reduce((sum, p) => sum + p.familiesServed, 0);
   const investment = inRadius.reduce((sum, p) => sum + p.totalItemsDistributed, 0) * 2.15;
 
   // Three-year need trend. Modelled backwards from the current score.
   const trend = useMemo(() => {
     const current =
-      zonesInRadius.length === 0
+      countiesInRadius.length === 0
         ? 0
-        : zonesInRadius.reduce((sum, z) => sum + z.foodAccessScore, 0) / zonesInRadius.length;
-    return [2024, 2025, 2026].map((year, index) => ({
+        : countiesInRadius.reduce((sum, c) => sum + c.foodAccessScore, 0) / countiesInRadius.length;
+    const thisYear = new Date().getFullYear();
+    return [thisYear - 2, thisYear - 1, thisYear].map((year, index) => ({
       year: String(year),
       score: Number((current - (2 - index) * 3.4).toFixed(1)),
     }));
-  }, [zonesInRadius]);
+  }, [countiesInRadius]);
 
   const handleExport = () => {
-    const bundle = buildModuleExport('chna', {
-      pantries: inRadius,
-      zones: zonesInRadius,
-      countyScope: `${radius}mi-radius`,
-      periodLabel: '3-year assessment window',
-      agencyName: user?.organization ?? 'Hospital system',
-      containsModelledFigures: true,
-    });
-    exportToCSV(bundle.filename, bundle.rows);
+    const bundle = buildModuleExport(
+      'chna',
+      exportContext({
+        pantries: inRadius,
+        counties: countiesInRadius,
+        scopeSuffix: `${radius}mi`,
+        periodLabel: '3-year assessment window',
+        containsModelledFigures: true,
+      }),
+    );
+    exportBundleToCSV(bundle);
   };
 
   return (
-    <ModuleShell moduleId="chna" onExport={handleExport}>
+    <ModuleShell
+      moduleId="chna"
+      onExport={handleExport}
+      scopeLabel={`${scopeLabel} · ${radius}-mile service radius`}
+      periodLabel={periodLabel}
+      status={status}
+      error={error}
+    >
       <div className="space-y-5">
         <SampleNotice what="The community investment figure and the three-year trend" />
 

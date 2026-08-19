@@ -16,6 +16,8 @@ interface ScheduleReportModalProps {
   onClose: () => void;
   templates: ReportTemplate[];
   assignedCounties: string[];
+  /** Owning agency, stamped onto the schedule so the security rules can match it. */
+  orgId: string;
   regionLabel: string;
   defaultCountyScope: string;
   createdBy: string;
@@ -38,6 +40,7 @@ export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({
   onClose,
   templates,
   assignedCounties,
+  orgId,
   regionLabel,
   defaultCountyScope,
   createdBy,
@@ -77,6 +80,7 @@ export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({
     const now = new Date();
     const report: ScheduledReport = {
       id: `sch_${now.getTime()}`,
+      orgId,
       templateId: selectedTemplate.id,
       templateName: selectedTemplate.name,
       frequency,

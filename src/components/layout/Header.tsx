@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, Menu, ChevronDown, User, Settings, LogOut, RefreshCw, Share2, Check } from 'lucide-react';
+import { Bell, Menu, ChevronDown, User, Settings, LogOut, Share2, Check, AlertTriangle } from 'lucide-react';
 import { PresetSwitcher } from '../ui/PresetSwitcher';
 import { PreviewModeSwitcher } from '../ui/PreviewModeSwitcher';
 import { UpgradeModal } from '../ui/UpgradeModal';
@@ -11,6 +11,9 @@ import { Menu as MenuPopover, MenuItem } from '../ui/Menu';
 import { useAuth } from '../../hooks/useAuth';
 import { useDashboardFilters } from '../../hooks/useDashboardFilters';
 import { checkFirebaseConnectionStatus } from '../../services/firebaseStatus';
+import { useLiveData } from '../../hooks/useLiveData';
+import { subscribeThresholdAlerts } from '../../services/dashboardData';
+import type { ThresholdAlert } from '../../types';
 import { ALL_COUNTIES } from '../../utils/scoping';
 
 interface HeaderProps {
@@ -26,15 +29,12 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggl
   const navigate = useNavigate();
   const connection = checkFirebaseConnectionStatus();
   const { pendingUpgrade, dismissUpgrade } = usePreset();
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  const handleManualSync = () => {
-    setIsRefreshing(true);
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 1200);
-  };
+  // Notifications are the threshold alerts that have actually fired. The bell
+  // previously carried a permanent "1 unread" dot and opened nothing.
+  const { data: alerts } = useLiveData(subscribeThresholdAlerts, [] as ThresholdAlert[]);
+  const triggered = alerts.filter((alert) => alert.isTriggered);
 
   const handleShareView = async () => {
     try {
@@ -50,7 +50,12 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggl
   if (!user) return null;
 
   return (
-    <header className="sticky top-0 z-30 bg-[#0f1117]/80 backdrop-blur-xl border-b border-white/[0.06]">
+    // `overflow-x-clip` rather than `hidden`: the filter row below scrolls
+    // horizontally on narrow screens, and without a clip here its width
+    // propagated out and made the whole page scroll sideways on a phone.
+    // `clip` contains it without creating a scroll container, which `hidden`
+    // would — and that would break the sticky positioning.
+    <header className="sticky top-0 z-30 overflow-x-clip bg-[#0f1117]/80 backdrop-blur-xl border-b border-white/[0.06]">
       <div className="flex items-center justify-between px-5 sm:px-8 py-4 gap-3">
         {/* Left: Mobile menu + Page title */}
         <div className="flex flex-1 items-center gap-3 min-w-0">
@@ -65,15 +70,21 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggl
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-bold text-white tracking-tight truncate">{pageTitle}</h1>
-              <button
-                type="button"
-                onClick={handleManualSync}
-                className={`hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border transition-all text-[10px] font-semibold cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 ${
+              {/* Data source, stated plainly. This used to be a button whose
+                  refresh spun for 1.2 seconds and re-read nothing — and once
+                  Firestore is connected the listeners stream, so there is
+                  nothing for a manual refresh to do. */}
+              <span
+                className={`hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[10px] font-semibold ${
                   connection.isConnected
-                    ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300 hover:bg-emerald-500/20'
-                    : 'bg-amber-500/10 border-amber-500/30 text-amber-200 hover:bg-amber-500/20'
+                    ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
+                    : 'bg-amber-500/10 border-amber-500/30 text-amber-200'
                 }`}
-                aria-label={`Data source: ${connection.mode}. Refresh dashboard data.`}
+                title={
+                  connection.isConnected
+                    ? 'Live Firestore listeners — figures update as rollups are written.'
+                    : 'Demonstration rollups generated in the browser. No database is connected.'
+                }
               >
                 <span
                   className={`w-1.5 h-1.5 rounded-full ${
@@ -82,11 +93,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggl
                   aria-hidden="true"
                 />
                 <span>{connection.mode}</span>
-                <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
-                <span className="sr-only" role="status">
-                  {isRefreshing ? 'Refreshing' : ''}
-                </span>
-              </button>
+              </span>
 
               <PreviewModeSwitcher className="hidden sm:block" />
             </div>
@@ -139,17 +146,69 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggl
             {copiedLink ? 'Link copied to clipboard' : ''}
           </span>
 
-          <button
-            type="button"
-            className="relative p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
-            aria-label="Notifications, 1 unread"
+          <MenuPopover
+            label={
+              triggered.length === 0
+                ? 'Notifications, none pending'
+                : `Notifications, ${triggered.length} threshold ${triggered.length === 1 ? 'alert' : 'alerts'} triggered`
+            }
+            triggerClassName="relative p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+            menuClassName="w-80"
+            trigger={
+              <>
+                <Bell className="w-5 h-5" aria-hidden="true" />
+                {triggered.length > 0 && (
+                  <span
+                    className="absolute top-1.5 right-1.5 w-2 h-2 bg-amber-400 rounded-full animate-pulse-glow"
+                    aria-hidden="true"
+                  />
+                )}
+              </>
+            }
           >
-            <Bell className="w-5 h-5" aria-hidden="true" />
-            <span
-              className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse-glow"
-              aria-hidden="true"
-            />
-          </button>
+            {(close) => (
+              <>
+                <div className="p-3.5 border-b border-white/[0.08] bg-white/[0.02]">
+                  <p className="text-[13px] font-semibold text-white">Threshold alerts</p>
+                  <p className="text-[11px] text-slate-300">
+                    {triggered.length === 0
+                      ? 'Nothing has crossed a threshold you configured.'
+                      : `${triggered.length} of your ${alerts.length} alerts ${triggered.length === 1 ? 'has' : 'have'} fired.`}
+                  </p>
+                </div>
+                {triggered.length > 0 && (
+                  <ul className="max-h-64 overflow-y-auto py-1 list-none m-0 p-0">
+                    {triggered.map((alert) => (
+                      <li key={alert.id} className="flex items-start gap-2.5 px-3.5 py-2.5">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden="true" />
+                        <span className="min-w-0">
+                          <span className="block text-[12px] font-medium text-white">
+                            {alert.countyOrPantry}
+                          </span>
+                          <span className="block text-[11px] text-slate-300">
+                            {alert.metric} {alert.condition === 'less_than' ? 'below' : alert.condition === 'greater_than' ? 'above' : 'changed to'}{' '}
+                            <span className="font-mono">{alert.thresholdValue}</span>
+                            {alert.lastTriggered ? ` · ${alert.lastTriggered}` : ''}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="py-1 border-t border-white/[0.08]">
+                  <MenuItem
+                    icon={<Settings className="w-4 h-4 text-slate-400" aria-hidden="true" />}
+                    onSelect={() => {
+                      close(false);
+                      navigate('/settings');
+                    }}
+                  >
+                    Manage threshold alerts
+                  </MenuItem>
+                </div>
+              </>
+            )}
+          </MenuPopover>
 
           <MenuPopover
             label={`Account menu for ${user.name}`}

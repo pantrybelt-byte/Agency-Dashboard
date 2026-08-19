@@ -9,6 +9,12 @@
 @layer base {
   html, body {
     font-family: var(--font-sans);
+    /* The page body must never scroll sideways. Wide content — data tables,
+       the header's filter row on a phone — carries its own `overflow-x-auto`
+       and scrolls inside its own box; this is the backstop that stops one of
+       them dragging the whole document with it. `clip` rather than `hidden`
+       so the sticky header still has the viewport as its scrollport. */
+    overflow-x: clip;
     background-color: #0f1117;
     color: #f1f5f9;
     font-size: 14px;

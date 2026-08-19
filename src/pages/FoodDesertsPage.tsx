@@ -2,8 +2,8 @@ import React, { useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from 'recharts';
-import { MapPin, AlertTriangle, TrendingDown, DollarSign, ShoppingCart, ChevronDown, ChevronUp, Download, Bell, Map as MapIcon, Navigation, Layers } from 'lucide-react';
-import { VerificationBadge } from '../components/ui/StatusBadge';
+import { MapPin, AlertTriangle, TrendingDown, DollarSign, ShoppingCart, ChevronDown, ChevronUp, Download, Bell, Map as MapIcon, Navigation, Layers, Lock } from 'lucide-react';
+import { VerificationBadge, verificationLevelFor } from '../components/ui/StatusBadge';
 import { ACCENTS } from '../config/presets';
 import { usePreset } from '../hooks/usePreset';
 import { ChartCard } from '../components/ui/ChartCard';
@@ -15,8 +15,12 @@ import { exportToCSV } from '../utils/csvExport';
 import { useAuth } from '../hooks/useAuth';
 import { useDashboardFilters } from '../hooks/useDashboardFilters';
 import { useLiveData } from '../hooks/useLiveData';
-import { subscribeCountyMetrics, subscribePantries } from '../services/dashboardData';
-import { ALL_COUNTIES, filterPantriesByScope, resolveVisibleCounties } from '../utils/scoping';
+import { useNavigate } from 'react-router-dom';
+import { saveThresholdAlert, subscribeCountyMetrics } from '../services/dashboardData';
+import { combineStatus, usePantryDirectory, usePantryRollups } from '../hooks/useDashboardData';
+import { pantryMetricsFor } from '../utils/analytics';
+import { ALL_COUNTIES, countyIdsForNames, resolveVisibleCounties } from '../utils/scoping';
+import { Crosshair } from 'lucide-react';
 import type { PantryMetric } from '../types';
 
 const statusColors: Record<string, { bg: string; text: string; border: string; dot: string }> = {
@@ -51,9 +55,12 @@ export const FoodDesertsPage: React.FC = () => {
   const { preset } = usePreset();
   const accent = ACCENTS[preset.accent];
   const { user } = useAuth();
-  const { countyScope } = useDashboardFilters();
+  const { countyScope, setCountyScope } = useDashboardFilters();
   const counties = useLiveData(subscribeCountyMetrics, []);
-  const { data: pantries } = useLiveData(subscribePantries, []);
+  // The directory and its rollups are already narrowed to the counties in
+  // scope by the query, so there is nothing left to filter here.
+  const directory = usePantryDirectory();
+  const pantryRollups = usePantryRollups();
   const [selectedPantry, setSelectedPantry] = useState<PantryMetric | null>(null);
 
   const visibleCounties = useMemo(
@@ -61,15 +68,42 @@ export const FoodDesertsPage: React.FC = () => {
     [user, countyScope],
   );
   const scopedPantries = useMemo(
-    () => filterPantriesByScope(pantries, visibleCounties),
-    [pantries, visibleCounties],
+    () => pantryMetricsFor(directory.data, pantryRollups.data),
+    [directory.data, pantryRollups.data],
   );
+  const pantryState = combineStatus(directory, pantryRollups);
   const [selectedCounty, setSelectedCounty] = useState<AlabamaCountyData | null>(null);
   const [expandedZone, setExpandedZone] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [mapMode, setMapMode] = useState<'choropleth' | 'gis'>('choropleth');
+  const [showAllZones, setShowAllZones] = useState(false);
+  const navigate = useNavigate();
 
-  const sortedZones = [...counties.data].sort((a, b) => a.foodAccessScore - b.foodAccessScore);
+  // The county-scope control speaks in bare names; the choropleth speaks in
+  // ids. Everything below this line works in ids so the two stay joined.
+  const unlockedCountyIds = useMemo(
+    () => countyIdsForNames(counties.data, user?.assignedCounties ?? []),
+    [counties.data, user],
+  );
+  const scopedCountyIds = useMemo(
+    () => countyIdsForNames(counties.data, visibleCounties),
+    [counties.data, visibleCounties],
+  );
+
+  // Every figure on this page is reported for the counties in scope. Ranking
+  // the whole state under a header that reads "Scoped to Lowndes County" is
+  // how a funder ends up quoting the wrong number.
+  const scopedIdSet = useMemo(() => new Set(scopedCountyIds), [scopedCountyIds]);
+  const sortedZones = useMemo(
+    () =>
+      counties.data
+        .filter((zone) => scopedIdSet.has(zone.id))
+        .sort((a, b) => a.foodAccessScore - b.foodAccessScore),
+    [counties.data, scopedIdSet],
+  );
+
+  const isScoped = countyScope !== ALL_COUNTIES;
+  const scopeLabel = isScoped ? `${countyScope} County` : `${sortedZones.length} assigned counties`;
   const criticalCount = sortedZones.filter(z => z.status === 'Critical').length;
   const atRiskCount = sortedZones.filter(z => z.status === 'At Risk').length;
   const avgDistance =
@@ -77,8 +111,50 @@ export const FoodDesertsPage: React.FC = () => {
       ? '—'
       : (sortedZones.reduce((s, z) => s + z.nearestPantryMiles, 0) / sortedZones.length).toFixed(1);
 
+  /**
+   * How each mapped location was established, counted from the directory in
+   * scope. These were four hardcoded numbers that never moved — and
+   * verification level is exactly the claim a hospital or health plan asks an
+   * agency to stand behind.
+   */
+  const pinIntegrity = useMemo(() => {
+    let level3 = 0;
+    let level2 = 0;
+    let level1 = 0;
+    for (const pantry of scopedPantries) {
+      const level = verificationLevelFor(pantry);
+      if (level === 3) level3 += 1;
+      else if (level === 2) level2 += 1;
+      else level1 += 1;
+    }
+    const total = scopedPantries.length;
+    return {
+      level3,
+      level2,
+      level1,
+      confirmedShare: total === 0 ? 0 : Math.round((level3 / total) * 1000) / 10,
+    };
+  }, [scopedPantries]);
+
+  /**
+   * The accordion renders one full-width expandable card per county. Scoped to
+   * an agency that is fine, but a statewide user unscoped is 67 of them — about
+   * nine screens of scrolling, directly beneath a chart that already ranks the
+   * worst twenty. Show the worst twelve and let the reader ask for the rest.
+   */
+  const ZONE_CEILING = 12;
+  const visibleZones = showAllZones ? sortedZones : sortedZones.slice(0, ZONE_CEILING);
+
+  const handleLockedCounty = (county: AlabamaCountyData) => {
+    setToastMessage(
+      `${county.name} is outside your agency's coverage. Opening plan and coverage options.`,
+    );
+    setTimeout(() => setToastMessage(null), 3500);
+    navigate('/billing');
+  };
+
   const handleExportCSV = () => {
-    exportToCSV('Alabama_All_Counties_Food_Desert_Assessment', sortedZones, [
+    exportToCSV(`Alabama_Food_Desert_Assessment_${isScoped ? countyScope : 'AllAssignedCounties'}`, sortedZones, [
       { key: 'name', label: 'County Name' },
       { key: 'region', label: 'Region' },
       { key: 'status', label: 'Status' },
@@ -92,14 +168,44 @@ export const FoodDesertsPage: React.FC = () => {
     ]);
   };
 
-  const handleCreateAlert = (countyName: string) => {
-    setToastMessage(`Threshold alert configured for ${countyName}! Notification sent to Agency Director.`);
-    setTimeout(() => setToastMessage(null), 3500);
+  /**
+   * Write a real alert through the same store Settings uses.
+   *
+   * This button previously announced "Notification sent to Agency Director"
+   * and wrote nothing, while Settings had a persisting implementation a few
+   * files away. One alert system, and it is the one that saves.
+   */
+  const handleCreateAlert = async (zone: AlabamaCountyData) => {
+    if (!user) return;
+    await saveThresholdAlert({
+      id: `alt_${zone.id}_${Date.now()}`,
+      orgId: user.orgId,
+      metric: 'Food Access Score',
+      countyOrPantry: zone.name,
+      condition: 'less_than',
+      thresholdValue: 25,
+      notifyEmail: user.email,
+      isTriggered: zone.foodAccessScore < 25,
+    });
+    setToastMessage(
+      `Alert saved: notify ${user.email} when ${zone.name} falls below a food access score of 25. Manage it in Settings.`,
+    );
+    setTimeout(() => setToastMessage(null), 4500);
   };
 
   const handleSelectCountyFromMap = (county: AlabamaCountyData) => {
     setSelectedCounty(county);
     setExpandedZone(county.id);
+  };
+
+  /**
+   * Selecting a county on the map used to expand a card lower down the page,
+   * and that was the end of it — seeing everything for that county meant
+   * finding the header dropdown and choosing the same county again by name.
+   * The map is the entry point to this product; it should be able to drive it.
+   */
+  const handleScopeToCounty = (county: AlabamaCountyData) => {
+    setCountyScope(county.name.replace(/\s+County$/, ''));
   };
 
   return (
@@ -163,22 +269,22 @@ export const FoodDesertsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Pin integrity — how each mapped location was established */}
+      {/* Pin integrity — counted from the pantry directory in scope, not typed */}
       <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[12px] font-medium text-slate-400">Location pin integrity</span>
           <span className="flex flex-wrap items-center gap-1.5">
             <VerificationBadge level={3} />
-            <span className="font-mono text-[11px] text-slate-400">18</span>
+            <span className="font-mono text-[11px] text-slate-400">{pinIntegrity.level3}</span>
             <VerificationBadge level={2} />
-            <span className="font-mono text-[11px] text-slate-400">7</span>
+            <span className="font-mono text-[11px] text-slate-400">{pinIntegrity.level2}</span>
             <VerificationBadge level={1} />
-            <span className="font-mono text-[11px] text-slate-400">3</span>
+            <span className="font-mono text-[11px] text-slate-400">{pinIntegrity.level1}</span>
           </span>
         </div>
         <span className="text-[11px] text-slate-400">
-          <span className="font-mono text-slate-300">92.8%</span> of Black Belt locations
-          satellite-confirmed
+          <span className="font-mono text-slate-300">{pinIntegrity.confirmedShare}%</span> of{' '}
+          {scopeLabel} locations field-verified
         </span>
       </div>
 
@@ -191,7 +297,9 @@ export const FoodDesertsPage: React.FC = () => {
             </div>
             <div>
               <p className="text-2xl font-bold tabular-nums text-white">{criticalCount}</p>
-              <p className="text-[12px] text-slate-400">Critical Zones (&lt; 25 Access Score)</p>
+              <p className="text-[12px] text-slate-400">
+                Critical Zones (&lt; 25 Access Score) · {scopeLabel}
+              </p>
             </div>
           </div>
         </div>
@@ -202,7 +310,7 @@ export const FoodDesertsPage: React.FC = () => {
             </div>
             <div>
               <p className="text-2xl font-bold tabular-nums text-white">{atRiskCount}</p>
-              <p className="text-[12px] text-slate-400">At-Risk Alabama Counties</p>
+              <p className="text-[12px] text-slate-400">At-Risk Counties · {scopeLabel}</p>
             </div>
           </div>
         </div>
@@ -213,7 +321,7 @@ export const FoodDesertsPage: React.FC = () => {
             </div>
             <div>
               <p className="text-2xl font-bold tabular-nums text-white">{avgDistance} mi</p>
-              <p className="text-[12px] text-slate-400">Statewide Avg Pantry Distance</p>
+              <p className="text-[12px] text-slate-400">Avg Pantry Distance · {scopeLabel}</p>
             </div>
           </div>
         </div>
@@ -224,28 +332,29 @@ export const FoodDesertsPage: React.FC = () => {
         title={mapMode === 'choropleth' ? 'Interactive Alabama County Heatmap' : 'GIS Pantry Coordinate Locations'}
         subtitle={
           mapMode === 'choropleth'
-            ? 'Albers equal-area projection · Hover or focus a county to inspect metrics · Select one to expand its detail below'
+            ? `Albers equal-area projection · ${scopeLabel} in colour, counties outside your coverage in grey · select a county to expand its detail below`
             : 'Pantry coordinates projected onto the same county geometry · Marker area shows families served'
         }
       >
         <DataStateBoundary
-          status={counties.status}
-          error={counties.error}
+          status={mapMode === 'choropleth' ? counties.status : pantryState.status}
+          error={mapMode === 'choropleth' ? counties.error : pantryState.error}
           source={counties.source}
           skeletonRows={4}
         >
           {mapMode === 'choropleth' ? (
             <AlabamaHeatMap
-              counties={sortedZones}
+              counties={counties.data}
               selectedCountyId={selectedCounty?.id}
               onSelectCounty={handleSelectCountyFromMap}
+              unlockedCountyIds={unlockedCountyIds}
+              scopedCountyIds={scopedCountyIds}
+              onLockedCountyClick={handleLockedCounty}
             />
           ) : (
             <AlabamaGisMap
               pantries={scopedPantries}
-              visibleCounties={
-                countyScope === ALL_COUNTIES ? (user?.assignedCounties ?? []) : visibleCounties
-              }
+              visibleCounties={visibleCounties}
               selectedPantryId={selectedPantry?.id}
               onSelectPantry={setSelectedPantry}
             />
@@ -253,10 +362,58 @@ export const FoodDesertsPage: React.FC = () => {
         </DataStateBoundary>
       </ChartCard>
 
+      {/* Selected county — the bridge from the map to the rest of the dashboard */}
+      {selectedCounty && (
+        <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: scoreBarColors(selectedCounty.foodAccessScore) }}
+              aria-hidden="true"
+            />
+            <p className="text-[13px] text-slate-300">
+              <span className="font-semibold text-white">{selectedCounty.name}</span> selected ·{' '}
+              <span className="font-mono">{selectedCounty.foodAccessScore}/100</span> ·{' '}
+              {selectedCounty.status}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {countyScope === selectedCounty.name.replace(/\s+County$/, '') ? (
+              <button
+                type="button"
+                onClick={() => setCountyScope(ALL_COUNTIES)}
+                className="flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3.5 py-2 text-[12px] font-semibold text-slate-200 transition-colors hover:bg-white/[0.08] hover:text-white cursor-pointer"
+              >
+                Clear county scope
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleScopeToCounty(selectedCounty)}
+                className="flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3.5 py-2 text-[12px] font-bold text-[#04140d] transition-colors hover:bg-emerald-400 cursor-pointer"
+              >
+                <Crosshair className="h-3.5 w-3.5" aria-hidden="true" />
+                Scope dashboard to {selectedCounty.name.replace(/\s+County$/, '')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCounty(null);
+                setExpandedZone(null);
+              }}
+              className="rounded-xl px-3 py-2 text-[12px] font-medium text-slate-400 transition-colors hover:text-white cursor-pointer"
+            >
+              Deselect
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Food Access Score Ranking Chart */}
       <ChartCard
         title="Food Access Score by County (Lowest to Highest)"
-        subtitle="Lower scores indicate severe food desert vulnerability"
+        subtitle={`Lower scores indicate severe food desert vulnerability · ${scopeLabel}`}
         action={
           <button
             onClick={handleExportCSV}
@@ -301,10 +458,20 @@ export const FoodDesertsPage: React.FC = () => {
       {/* Expandable County Detail Cards */}
       <ChartCard
         title="County Census Metrics & ZIP Tracts"
-        subtitle={selectedCounty ? `Selected: ${selectedCounty.name}` : 'Click any county in the heatmap to view metrics'}
+        subtitle={
+          selectedCounty
+            ? `Selected: ${selectedCounty.name}`
+            : `Showing ${visibleZones.length} of ${sortedZones.length} ${sortedZones.length === 1 ? 'county' : 'counties'} in scope, most vulnerable first · click any lit county in the heatmap`
+        }
       >
         <div className="space-y-2">
-          {sortedZones.map((zone) => {
+          {sortedZones.length === 0 && (
+            <p className="flex items-center justify-center gap-2 py-8 text-center text-[13px] text-slate-400">
+              <Lock className="h-4 w-4 shrink-0 text-amber-400/80" aria-hidden="true" />
+              No county census data for {scopeLabel}. Widen the county scope in the header.
+            </p>
+          )}
+          {visibleZones.map((zone) => {
             const colors = statusColors[zone.status];
             const isExpanded = expandedZone === zone.id;
 
@@ -380,7 +547,7 @@ export const FoodDesertsPage: React.FC = () => {
                         Top Requested Need: <span className="text-emerald-400 font-semibold">{zone.topRequestedItem}</span>
                       </p>
                       <button
-                        onClick={() => handleCreateAlert(zone.name)}
+                        onClick={() => void handleCreateAlert(zone)}
                         className="px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/30 text-[11px] font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
                       >
                         <Bell className="w-3.5 h-3.5" />
@@ -392,6 +559,18 @@ export const FoodDesertsPage: React.FC = () => {
               </div>
             );
           })}
+
+          {sortedZones.length > ZONE_CEILING && (
+            <button
+              type="button"
+              onClick={() => setShowAllZones((current) => !current)}
+              className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2.5 text-[12px] font-semibold text-slate-200 transition-colors hover:bg-white/[0.06] hover:text-white cursor-pointer"
+            >
+              {showAllZones
+                ? `Show only the ${ZONE_CEILING} most vulnerable`
+                : `Show all ${sortedZones.length} counties in scope`}
+            </button>
+          )}
         </div>
       </ChartCard>
     </div>

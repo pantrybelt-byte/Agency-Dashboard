@@ -13,27 +13,25 @@ import { SegmentFilter } from '../components/ui/SegmentFilter';
 import { DataStateBoundary } from '../components/ui/DataStateBoundary';
 import { useAuth } from '../hooks/useAuth';
 import { useLiveData } from '../hooks/useLiveData';
-import { subscribePantries } from '../services/dashboardData';
-import { mockDemographics } from '../data/mockData';
+import { subscribeCountyMetrics } from '../services/dashboardData';
 import {
-  ALL_COUNTIES,
-  countyWeight,
-  filterPantriesByScope,
-  resolveVisibleCounties,
-  scaleSeries,
-  segmentLabel,
-  segmentShare,
-  summarisePantries,
-} from '../utils/scoping';
+  combineStatus,
+  useCountyRollups,
+  usePantryDirectory,
+  usePantryRollups,
+} from '../hooks/useDashboardData';
 import {
-  mockRegionSummary,
-  mockFamiliesServedSeries,
-  mockCategoryBreakdown,
-  mockDistributionByType,
-} from '../data/mockData';
-import { exportToCSV } from '../utils/csvExport';
+  categoryBreakdownFor,
+  dailySeries,
+  demographicsFor,
+  distributionByType,
+  pantryMetricsFor,
+  summarise,
+} from '../utils/analytics';
+import { ZIP_DIRECTORY } from '../data/zipDirectory';
+import { ALL_COUNTIES, countyIdsForNames, resolveVisibleCounties, segmentLabel, segmentShare } from '../utils/scoping';
+import { exportToCSV, exportBundleToCSV } from '../utils/csvExport';
 import { buildModuleExport } from '../utils/moduleExports';
-import { mockFoodDesertZones } from '../data/mockData';
 import { useDashboardFilters } from '../hooks/useDashboardFilters';
 
 
@@ -64,7 +62,16 @@ export const OverviewPage: React.FC = () => {
   const { preset } = usePreset();
   const accent = ACCENTS[preset.accent];
 
-  const { data: pantries, status, source, error } = useLiveData(subscribePantries, []);
+  // Everything on this page reads the same scoped, period-bounded rollups, so
+  // the county selector and the date picker reach every figure by construction
+  // rather than by each chart remembering to apply them.
+  const countyRollups = useCountyRollups();
+  const pantryRollups = usePantryRollups();
+  const directory = usePantryDirectory();
+  const countyMetrics = useLiveData(subscribeCountyMetrics, []);
+
+  const { status, error } = combineStatus(countyRollups, pantryRollups, directory);
+  const source = countyRollups.source;
 
   const assignedCounties = useMemo(() => user?.assignedCounties ?? [], [user]);
   const visibleCounties = useMemo(
@@ -72,49 +79,77 @@ export const OverviewPage: React.FC = () => {
     [assignedCounties, countyScope],
   );
 
-  // Everything the user may see, before the county narrowing. Scoping to a
-  // county must never be able to widen what a user can see.
-  const permittedPantries = useMemo(
-    () => filterPantriesByScope(pantries, assignedCounties),
-    [pantries, assignedCounties],
-  );
   const scopedPantries = useMemo(
-    () => filterPantriesByScope(pantries, visibleCounties),
-    [pantries, visibleCounties],
+    () => pantryMetricsFor(directory.data, pantryRollups.data),
+    [directory.data, pantryRollups.data],
   );
 
+  // The segment share is derived from the demographics of the counties and days
+  // actually in scope, so narrowing to one county changes what "seniors" means
+  // there rather than reapplying a region-wide ratio.
+  const demographics = useMemo(
+    () => demographicsFor(countyRollups.data, ZIP_DIRECTORY),
+    [countyRollups.data],
+  );
   const segmentFraction = useMemo(
-    () => segmentShare(mockDemographics, demographicSegment),
-    [demographicSegment],
+    () => segmentShare(demographics, demographicSegment),
+    [demographics, demographicSegment],
   );
 
-  // Summed from the pantries actually in scope, not scaled by a hardcoded
-  // per-county fraction. These are figures an agency reports to a funder.
-  const summary = useMemo(
-    () => summarisePantries(scopedPantries, mockRegionSummary, demographicSegment, segmentFraction),
-    [scopedPantries, demographicSegment, segmentFraction],
-  );
+  const totals = useMemo(() => summarise(countyRollups.data), [countyRollups.data]);
 
-  // The families-served series only exists at region level, so it is weighted
-  // by the in-scope share of families rather than invented.
-  const scopeWeight = useMemo(
-    () => (countyScope === ALL_COUNTIES ? 1 : countyWeight(permittedPantries, scopedPantries)),
-    [countyScope, permittedPantries, scopedPantries],
-  );
+  const summary = useMemo(() => {
+    const scale = demographicSegment === 'all' ? 1 : segmentFraction;
+    return {
+      totalFamiliesServed: Math.round(totals.familiesServed * scale),
+      totalItemsDistributed: Math.round(totals.itemsDistributed * scale),
+      totalPantries: scopedPantries.length,
+      activePantries: scopedPantries.filter((pantry) => pantry.isActive).length,
+      familiesServedTrend: totals.familiesTrend,
+      itemsDistributedTrend: totals.itemsTrend,
+    };
+  }, [totals, scopedPantries, demographicSegment, segmentFraction]);
 
-  const familiesSeries = useMemo(
-    () => scaleSeries(mockFamiliesServedSeries, resolved.dayCount, scopeWeight * segmentFraction),
-    [resolved.dayCount, scopeWeight, segmentFraction],
-  );
+  const familiesSeries = useMemo(() => {
+    const series = dailySeries(countyRollups.data, (doc) => doc.familiesServed);
+    if (demographicSegment === 'all') return series;
+    return series.map((point) => ({
+      ...point,
+      value: Math.round(point.value * segmentFraction),
+      previousValue:
+        point.previousValue === undefined ? undefined : Math.round(point.previousValue * segmentFraction),
+    }));
+  }, [countyRollups.data, demographicSegment, segmentFraction]);
 
-  const categoryBreakdown = useMemo(
-    () =>
-      mockCategoryBreakdown.map((entry) => ({
-        ...entry,
-        value: Math.round(entry.value * scopeWeight * segmentFraction),
-      })),
-    [scopeWeight, segmentFraction],
-  );
+  const categoryBreakdown = useMemo(() => {
+    const scale = demographicSegment === 'all' ? 1 : segmentFraction;
+    return categoryBreakdownFor(countyRollups.data.current).map((entry) => ({
+      ...entry,
+      value: Math.round(entry.value * scale),
+    }));
+  }, [countyRollups.data, demographicSegment, segmentFraction]);
+
+  const distribution = useMemo(() => distributionByType(directory.data), [directory.data]);
+
+  /**
+   * Mean food access score across the counties in scope, from the census
+   * rollup. Previously this was a hand-typed lookup covering six county names
+   * and silently falling back to a region average for everyone else.
+   */
+  const avgFoodDesertScore = useMemo(() => {
+    const inScope = new Set(countyIdsForNames(countyMetrics.data, visibleCounties));
+    const scores = countyMetrics.data
+      .filter((county) => inScope.has(county.id))
+      .map((county) => county.foodAccessScore);
+    if (scores.length === 0) return 0;
+    return Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10;
+  }, [countyMetrics.data, visibleCounties]);
+
+  /** County census rows for the counties in scope — the export's other half. */
+  const scopedCounties = useMemo(() => {
+    const inScope = new Set(countyIdsForNames(countyMetrics.data, visibleCounties));
+    return countyMetrics.data.filter((county) => inScope.has(county.id));
+  }, [countyMetrics.data, visibleCounties]);
 
   const topPantries = useMemo(
     () => [...scopedPantries].sort((a, b) => b.totalVisits - a.totalVisits).slice(0, 5),
@@ -129,21 +164,14 @@ export const OverviewPage: React.FC = () => {
       itemsDistributed: summary.totalItemsDistributed,
       activePantries: summary.activePantries,
       totalPantries: summary.totalPantries,
-      foodDesertScore:
-        countyScope === 'Lowndes' ? 18
-        : countyScope === 'Macon' ? 24
-        : countyScope === 'Dallas' ? 31
-        : countyScope === 'Montgomery' ? 58
-        : countyScope === 'Autauga' ? 62
-        : countyScope === 'Elmore' ? 71
-        : summary.avgFoodDesertScore,
+      foodDesertScore: avgFoodDesertScore,
       countyCount: visibleCounties.length,
       pantriesInScope: scopedPantries.length,
       familiesTrend: summary.familiesServedTrend,
       itemsTrend: summary.itemsDistributedTrend,
-      trendLabel: compareMode ? `vs previous ${resolved.dayCount} days` : 'vs last period',
+      trendLabel: `vs previous ${resolved.dayCount} days`,
     }),
-    [summary, countyScope, visibleCounties.length, scopedPantries.length, compareMode, resolved.dayCount],
+    [summary, avgFoodDesertScore, visibleCounties.length, scopedPantries.length, resolved.dayCount],
   );
 
   const presetKpis = useMemo(() => preset.buildKpis(presetMetrics), [preset, presetMetrics]);
@@ -154,13 +182,15 @@ export const OverviewPage: React.FC = () => {
   const handlePresetExport = () => {
     const bundle = buildModuleExport(preset.id, {
       pantries: scopedPantries,
-      zones: mockFoodDesertZones,
+      // Scoped, not the whole state: the file is the copy that leaves the
+      // building, so it must not carry counties the agency does not cover.
+      counties: scopedCounties,
       countyScope,
       periodLabel: `${resolved.dayCount} days`,
       agencyName: user?.organization ?? 'AccessBelt agency',
       containsModelledFigures: hasIllustrativeKpis,
     });
-    if (bundle.rows.length > 0) exportToCSV(bundle.filename, bundle.rows);
+    exportBundleToCSV(bundle);
   };
 
   const scopeDescription =
@@ -273,7 +303,7 @@ export const OverviewPage: React.FC = () => {
       )}
 
       {/* KPI row — the preset decides which four figures this buyer cares about */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {presetKpis.map((kpi, index) => (
           <MetricCard
             key={kpi.label}
@@ -283,6 +313,7 @@ export const OverviewPage: React.FC = () => {
             trendLabel={kpi.trendLabel}
             mono={kpi.mono}
             illustrative={kpi.illustrative}
+            emphasis={index === 0 ? 'lead' : 'default'}
             icon={<kpi.icon className={`w-5 h-5 ${accent.text}`} aria-hidden="true" />}
             glowClass={kpi.glow}
             animationDelay={['', 'delay-100', 'delay-200', 'delay-300'][index] ?? ''}
@@ -301,6 +332,19 @@ export const OverviewPage: React.FC = () => {
               : `${resolved.dayCount}-day trend across all pantries`
           }
           className="lg:col-span-2"
+          // The headline chart was the only one on the page with no text
+          // equivalent, which also made it the only one a screen reader could
+          // not read at all.
+          dataTable={{
+            columns: compareMode
+              ? ['Day', 'Families served', 'Previous period']
+              : ['Day', 'Families served'],
+            rows: familiesSeries.map((point) =>
+              compareMode
+                ? [point.date, point.value, point.previousValue ?? 0]
+                : [point.date, point.value],
+            ),
+          }}
           action={
             compareMode ? (
               <span className="flex items-center gap-1 text-[11px] font-semibold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-lg">
@@ -379,7 +423,7 @@ export const OverviewPage: React.FC = () => {
             <ResponsiveContainer width="100%" height={180}>
               <PieChart>
                 <Pie
-                  data={mockDistributionByType}
+                  data={distribution}
                   cx="50%"
                   cy="50%"
                   innerRadius={50}
@@ -387,7 +431,7 @@ export const OverviewPage: React.FC = () => {
                   paddingAngle={3}
                   dataKey="value"
                 >
-                  {mockDistributionByType.map((entry, index) => (
+                  {distribution.map((entry, index) => (
                     <Cell key={index} fill={entry.color} stroke="transparent" />
                   ))}
                 </Pie>
@@ -404,7 +448,7 @@ export const OverviewPage: React.FC = () => {
               </PieChart>
             </ResponsiveContainer>
             <div className="flex flex-wrap gap-3 justify-center mt-2">
-              {mockDistributionByType.map((item) => (
+              {distribution.map((item) => (
                 <div key={item.category} className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
                   <span className="text-[11px] text-slate-400">{item.category}</span>

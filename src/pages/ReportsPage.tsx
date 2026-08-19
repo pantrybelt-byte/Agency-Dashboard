@@ -1,23 +1,34 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  FileBarChart2, Download, Printer, Clock, CheckCircle, Loader2, Calendar,
-  BarChart3, MapPin, Store, Package, FileText, Sliders, Mail, Plus, Trash2
+  FileBarChart2, Download, Printer, CheckCircle, Calendar,
+  BarChart3, MapPin, Store, Package, FileText, Sliders, Mail, Plus, Trash2, Inbox
 } from 'lucide-react';
 import { ChartCard } from '../components/ui/ChartCard';
 import { ScheduleReportModal } from '../components/ui/ScheduleReportModal';
+import { DataStateBoundary } from '../components/ui/DataStateBoundary';
 import { useAuth } from '../hooks/useAuth';
 import { useDashboardFilters } from '../hooks/useDashboardFilters';
 import { useLiveData } from '../hooks/useLiveData';
 import {
   deleteScheduledReport,
   saveScheduledReport,
+  subscribeCountyMetrics,
   subscribeScheduledReports,
 } from '../services/dashboardData';
+import {
+  combineStatus,
+  useCountyRollups,
+  useItemCatalogue,
+  usePantryDirectory,
+  usePantryRollups,
+} from '../hooks/useDashboardData';
+import { pantryMetricsFor, requestedItemsFor } from '../utils/analytics';
+import { buildModuleExport, type ExportBundle } from '../utils/moduleExports';
 import type { ScheduledReport } from '../types';
 import { describeSchedule } from '../utils/reportSchedule';
-import { ALL_COUNTIES } from '../utils/scoping';
-import { mockReportTemplates, mockGeneratedReports, mockPantryMetrics, mockRequestedItems, mockFoodDesertZones } from '../data/mockData';
-import { exportToCSV } from '../utils/csvExport';
+import { ALL_COUNTIES, countyIdsForNames, resolveVisibleCounties } from '../utils/scoping';
+import { mockReportTemplates } from '../data/mockData';
+import { exportBundleToCSV } from '../utils/csvExport';
 
 const iconMap: Record<string, React.ReactNode> = {
   'bar-chart': <BarChart3 className="w-5 h-5 text-emerald-400" />,
@@ -30,8 +41,30 @@ const iconMap: Record<string, React.ReactNode> = {
 
 export const ReportsPage: React.FC = () => {
   const { user } = useAuth();
-  const { countyScope } = useDashboardFilters();
+  const { countyScope, resolved } = useDashboardFilters();
   const { data: scheduledRules } = useLiveData(subscribeScheduledReports, [] as ScheduledReport[]);
+
+  const countyRollups = useCountyRollups();
+  const pantryRollups = usePantryRollups();
+  const directory = usePantryDirectory();
+  const catalogue = useItemCatalogue();
+  const countyMetrics = useLiveData(subscribeCountyMetrics, []);
+  const { status, error } = combineStatus(countyRollups, pantryRollups, directory, catalogue);
+
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [generatedToast, setGeneratedToast] = useState<string | null>(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+
+  /**
+   * Reports produced in this session.
+   *
+   * This replaces a hardcoded five-row history that described files nobody had
+   * generated, with sizes and timestamps that were invented. A report list
+   * should only ever contain reports that exist.
+   */
+  const [history, setHistory] = useState<
+    { id: string; name: string; range: string; generatedAt: string; rows: number; bundle: ExportBundle }[]
+  >([]);
 
   const handleSchedule = async (report: ScheduledReport) => {
     await saveScheduledReport(report);
@@ -41,46 +74,153 @@ export const ReportsPage: React.FC = () => {
     await deleteScheduledReport(report.id);
   };
 
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
-  const [generating, setGenerating] = useState(false);
-  const [generatedToast, setGeneratedToast] = useState<string | null>(null);
-  
-  // Schedule Modal State
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const visibleCounties = useMemo(
+    () => resolveVisibleCounties(user?.assignedCounties ?? [], countyScope),
+    [user, countyScope],
+  );
 
+  const pantries = useMemo(
+    () => pantryMetricsFor(directory.data, pantryRollups.data),
+    [directory.data, pantryRollups.data],
+  );
 
-  const handleGenerate = (templateId: string) => {
-    setGenerating(true);
-    setSelectedTemplate(templateId);
-    setTimeout(() => {
-      setGenerating(false);
-      setSelectedTemplate(null);
-      setGeneratedToast('Report generated & CSV downloaded successfully!');
-      setTimeout(() => setGeneratedToast(null), 3000);
+  const counties = useMemo(() => {
+    const inScope = new Set(countyIdsForNames(countyMetrics.data, visibleCounties));
+    return countyMetrics.data.filter((county) => inScope.has(county.id));
+  }, [countyMetrics.data, visibleCounties]);
 
-      if (templateId === 'rpt_02') {
-        exportToCSV('USDA_Food_Desert_Report', mockFoodDesertZones);
-      } else if (templateId === 'rpt_04') {
-        exportToCSV('Item_Demand_Intelligence_Report', mockRequestedItems);
-      } else {
-        exportToCSV('United_Way_Community_Impact_Report', mockPantryMetrics);
+  const items = useMemo(
+    () => requestedItemsFor(catalogue.data, countyRollups.data),
+    [catalogue.data, countyRollups.data],
+  );
+
+  const scopeName = countyScope === ALL_COUNTIES ? 'AllAssigned' : countyScope;
+
+  const provenance = (purpose: string) => [
+    `AccessBelt export — ${purpose}`,
+    `Agency: ${user?.organization ?? 'AccessBelt agency'}`,
+    `Scope: ${countyScope === ALL_COUNTIES ? `${visibleCounties.length} assigned counties` : `${countyScope} County`} · Period: ${resolved.label}`,
+    `Generated: ${new Date().toISOString()}`,
+  ];
+
+  /**
+   * One builder per template.
+   *
+   * Every template used to hand back one of three fixed CSVs picked by id, so
+   * six differently named buttons produced three files, none of which matched
+   * the description above them.
+   */
+  const buildReport = (templateId: string): ExportBundle | null => {
+    switch (templateId) {
+      case 'rpt_02':
+        return {
+          filename: `Food_Desert_Assessment_${scopeName}`,
+          rows: counties.map((county) => ({
+            County: county.name,
+            Region: county.region,
+            Status: county.status,
+            'Food Access Score': county.foodAccessScore,
+            Population: county.population,
+            'Poverty Rate (%)': county.povertyRate,
+            'Median Income': county.medianIncome,
+            'Nearest Pantry (mi)': county.nearestPantryMiles,
+            'Active Pantries': county.activePantries,
+            'Top Need': county.topRequestedItem,
+          })),
+          provenance: provenance('Food desert assessment (county census measures)'),
+        };
+
+      case 'rpt_03':
+        return {
+          filename: `Pantry_Performance_Scorecard_${scopeName}`,
+          rows: pantries.map((pantry) => ({
+            Pantry: pantry.name,
+            County: pantry.county,
+            Type: pantry.type,
+            Status: pantry.isActive ? 'Active' : 'Inactive',
+            Visits: pantry.totalVisits,
+            'Items Distributed': pantry.totalItemsDistributed,
+            'Families Served': pantry.familiesServed,
+            'Avg Visits / Day': pantry.avgDailyVisits,
+            'Change vs Previous Period (%)': pantry.growthRate,
+          })),
+          provenance: provenance('Pantry performance scorecard'),
+        };
+
+      case 'rpt_04':
+        return {
+          filename: `Item_Demand_Intelligence_${scopeName}`,
+          rows: items.map((item) => ({
+            Item: item.name,
+            Category: item.category,
+            Requests: item.requestCount,
+            Direction: item.trend,
+            'Change vs Previous Period (%)': item.trendPercentage,
+            'Last Reported Day': item.lastRequested,
+          })),
+          provenance: provenance('Item demand and supply gap intelligence'),
+        };
+
+      case 'rpt_06': {
+        const bundle = buildModuleExport('grant', {
+          pantries,
+          counties,
+          countyScope: scopeName,
+          periodLabel: resolved.label,
+          agencyName: user?.organization ?? 'AccessBelt agency',
+          containsModelledFigures: false,
+        });
+        return { ...bundle, filename: `Custom_Range_${scopeName}_${resolved.startDate}_to_${resolved.endDate}` };
       }
-    }, 1200);
-  };
 
-  const handleDownloadReportCSV = (reportName: string) => {
-    if (reportName.includes('Food Desert')) {
-      exportToCSV('Food_Desert_Assessment_Q2', mockFoodDesertZones);
-    } else if (reportName.includes('Demand')) {
-      exportToCSV('Item_Demand_Intelligence_August', mockRequestedItems);
-    } else {
-      exportToCSV('AccessBelt_Monthly_Impact_Report', mockPantryMetrics);
+      // rpt_01 and rpt_05 are both county-level impact summaries, which is
+      // exactly what the grant builder produces.
+      default:
+        return buildModuleExport('grant', {
+          pantries,
+          counties,
+          countyScope: scopeName,
+          periodLabel: resolved.label,
+          agencyName: user?.organization ?? 'AccessBelt agency',
+          containsModelledFigures: false,
+        });
     }
   };
 
+  /** Rows the template would produce right now, so the card is not a promise. */
+  const rowCountFor = (templateId: string): number => buildReport(templateId)?.rows.length ?? 0;
+
+  const handleGenerate = (templateId: string) => {
+    const template = mockReportTemplates.find((entry) => entry.id === templateId);
+    const bundle = buildReport(templateId);
+    if (!bundle || bundle.rows.length === 0) {
+      setGeneratedToast('Nothing to report for the current scope and period.');
+      setTimeout(() => setGeneratedToast(null), 3000);
+      return;
+    }
+
+    setSelectedTemplate(templateId);
+    exportBundleToCSV(bundle);
+
+    setHistory((current) => [
+      {
+        id: `${templateId}_${Date.now()}`,
+        name: `${template?.name ?? templateId} — ${resolved.label}`,
+        range: `${resolved.startDate} to ${resolved.endDate}`,
+        generatedAt: new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
+        rows: bundle.rows.length,
+        bundle,
+      },
+      ...current,
+    ]);
+
+    setGeneratedToast(`${bundle.rows.length} rows exported.`);
+    setTimeout(() => setGeneratedToast(null), 3000);
+  };
 
   return (
     <div className="space-y-6">
+      <DataStateBoundary status={status} error={error} source={countyRollups.source} skeletonRows={3}>
       {/* Toast Notification */}
       {generatedToast && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#1a1d2e] border border-emerald-500/30 shadow-xl px-4 py-3 rounded-xl flex items-center gap-3 animate-fade-in-up">
@@ -103,7 +243,7 @@ export const ReportsPage: React.FC = () => {
                   ? 'border-emerald-500/30 bg-emerald-500/[0.06]'
                   : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]'
               }`}
-              onClick={() => !generating && setSelectedTemplate(selectedTemplate === template.id ? null : template.id)}
+              onClick={() => setSelectedTemplate(selectedTemplate === template.id ? null : template.id)}
             >
               <div className="flex items-start gap-3 mb-3">
                 <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
@@ -125,33 +265,19 @@ export const ReportsPage: React.FC = () => {
               <p className="text-[12px] text-slate-400 leading-relaxed mb-4">{template.description}</p>
               
               <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
-                {template.lastGenerated ? (
-                  <p className="text-[11px] text-slate-400 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-slate-400" />
-                    {template.lastGenerated}
-                  </p>
-                ) : (
-                  <span className="text-[11px] text-slate-400">On-demand</span>
-                )}
+                <span className="text-[11px] text-slate-400">
+                  {rowCountFor(template.id)} rows · {resolved.label}
+                </span>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleGenerate(template.id);
                   }}
-                  disabled={generating}
+                  disabled={status !== 'ready'}
                   className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/20 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  {generating && selectedTemplate === template.id ? (
-                    <>
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <FileBarChart2 className="w-3.5 h-3.5" />
-                      Generate CSV
-                    </>
-                  )}
+                  <FileBarChart2 className="w-3.5 h-3.5" />
+                  Generate CSV
                 </button>
               </div>
             </div>
@@ -188,15 +314,15 @@ export const ReportsPage: React.FC = () => {
         </button>
 
         <button
-          onClick={() => exportToCSV('All_Pantry_Metrics_Export', mockPantryMetrics)}
+          onClick={() => handleGenerate('rpt_03')}
           className="card p-4 flex items-center gap-3 hover:border-white/[0.12] transition-all cursor-pointer group text-left"
         >
           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
             <Download className="w-5 h-5 text-emerald-400" />
           </div>
           <div>
-            <p className="text-[13px] font-semibold text-white">Export Full Database CSV</p>
-            <p className="text-[11px] text-slate-400">Instant download for analysts</p>
+            <p className="text-[13px] font-semibold text-white">Export Pantry Scorecard</p>
+            <p className="text-[11px] text-slate-400">Every pantry in scope, for this period</p>
           </div>
         </button>
       </div>
@@ -273,68 +399,61 @@ export const ReportsPage: React.FC = () => {
         )}
       </ChartCard>
 
-      {/* Generated Reports History */}
+      {/* Generated Reports History — only what this session actually produced */}
       <ChartCard
-        title="Report History"
-        subtitle="Previously generated reports available for download"
+        title="Reports generated this session"
+        subtitle="Re-download any file without rebuilding it"
       >
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-white/[0.06]">
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-left">Report</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-left">Date Range</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-left">Generated</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-center">Status</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-right">Size</th>
-                <th className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockGeneratedReports.map((report) => (
-                <tr key={report.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
-                  <td className="py-3 px-3">
-                    <p className="text-[13px] font-medium text-white">{report.name}</p>
-                  </td>
-                  <td className="py-3 px-3 text-[12px] text-slate-400">{report.dateRange}</td>
-                  <td className="py-3 px-3 text-[12px] text-slate-400">{report.generatedAt}</td>
-                  <td className="py-3 px-3 text-center">
-                    <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                      report.status === 'ready'
-                        ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20'
-                        : report.status === 'generating'
-                        ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
-                        : 'text-red-400 bg-red-500/10 border border-red-500/20'
-                    }`}>
-                      {report.status === 'ready' && <CheckCircle className="w-3 h-3" />}
-                      {report.status === 'generating' && <Loader2 className="w-3 h-3 animate-spin" />}
-                      {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-                    </span>
-                  </td>
-                  <td className="py-3 px-3 text-[12px] text-slate-400 text-right font-mono">{report.fileSize}</td>
-                  <td className="py-3 px-3 text-right">
-                    <div className="flex items-center gap-1 justify-end">
-                      <button
-                        onClick={() => handleDownloadReportCSV(report.name)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-                        title="Download CSV Data"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => window.print()}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-                        title="Print PDF View"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
+        {history.length === 0 ? (
+          <div className="py-10 flex flex-col items-center text-center">
+            <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mb-3">
+              <Inbox className="w-5 h-5 text-slate-300" aria-hidden="true" />
+            </div>
+            <p className="text-[13px] font-semibold text-white">No reports generated yet</p>
+            <p className="text-[12px] text-slate-300 mt-1 max-w-sm">
+              Generate one above and it appears here with the scope and period it covered. History is
+              not stored between sessions yet.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <caption className="sr-only">Reports generated during this session</caption>
+              <thead>
+                <tr className="border-b border-white/[0.06]">
+                  <th scope="col" className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-left">Report</th>
+                  <th scope="col" className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-left">Date range</th>
+                  <th scope="col" className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-left">Generated</th>
+                  <th scope="col" className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-right">Rows</th>
+                  <th scope="col" className="py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {history.map((entry) => (
+                  <tr key={entry.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
+                    <td className="py-3 px-3">
+                      <p className="text-[13px] font-medium text-white">{entry.name}</p>
+                    </td>
+                    <td className="py-3 px-3 font-mono text-[12px] text-slate-400">{entry.range}</td>
+                    <td className="py-3 px-3 text-[12px] text-slate-400">{entry.generatedAt}</td>
+                    <td className="py-3 px-3 text-right font-mono tabular-nums text-[12px] text-slate-300">
+                      {entry.rows.toLocaleString()}
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <button
+                        onClick={() => exportBundleToCSV(entry.bundle)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+                        aria-label={`Download ${entry.name} again`}
+                      >
+                        <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </ChartCard>
 
       <ScheduleReportModal
@@ -342,11 +461,13 @@ export const ReportsPage: React.FC = () => {
         onClose={() => setShowScheduleModal(false)}
         templates={mockReportTemplates}
         assignedCounties={user?.assignedCounties ?? []}
+        orgId={user?.orgId ?? ''}
         regionLabel={user?.region ?? 'All counties'}
         defaultCountyScope={countyScope}
         createdBy={user?.email ?? ''}
         onSchedule={handleSchedule}
       />
+      </DataStateBoundary>
     </div>
   );
 };

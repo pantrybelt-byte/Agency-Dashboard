@@ -69,3 +69,40 @@ export function exportToCSV<T extends object>(
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+/**
+ * Export a module bundle, writing its provenance lines above the table.
+ *
+ * `buildModuleExport` has always produced provenance — agency, scope, period,
+ * and the warning that fires when a figure is modelled rather than measured —
+ * and the exporter dropped it on the floor. A file that leaves the building
+ * without saying what it covers is the one that gets quoted out of context.
+ *
+ * The lines go in as single-column rows followed by a blank row. Excel and
+ * LibreOffice both show them as a header block and still parse the table
+ * beneath, which is the convention grant reviewers already expect.
+ */
+export function exportBundleToCSV(bundle: {
+  filename: string;
+  rows: Record<string, string | number>[];
+  provenance: string[];
+}): void {
+  const body = buildCSV(bundle.rows);
+  if (!body) return;
+
+  const header = bundle.provenance.map((line) => escapeCSVValue(line)).join('\r\n');
+  const csv = header ? `${header}\r\n\r\n${body}` : body;
+
+  const blob = new Blob([UTF8_BOM + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const dateStr = new Date().toISOString().split('T')[0];
+
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `${bundle.filename}_${dateStr}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}

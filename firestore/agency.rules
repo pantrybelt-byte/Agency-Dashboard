@@ -1,0 +1,141 @@
+rules_version = '2';
+
+// ===========================================================================
+// AccessBelt Agency Analytics — Firestore security rules
+//
+// DEPLOY TARGET IS THE NAMED DATABASE:
+//
+//     firebase deploy --only firestore:rules --database accessbelt-agency
+//
+// Omitting --database deploys to `(default)`, which belongs to the consumer
+// app and would replace the rules governing family-facing resource data.
+// ===========================================================================
+//
+// The model in one sentence: an agency user may READ rollups only for the
+// counties their custom claims list, and may WRITE nothing except their own
+// alerts and report schedules.
+//
+// Rollups are produced by Cloud Functions from the consumer app's event
+// stream. Nothing a client sends may become a reported figure — an agency that
+// could write its own `familiesServed` could write its own grant outcome.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -- Claims ------------------------------------------------------------
+    // Minted by the `grantAgencyAccess` callable at onboarding:
+    //   { role: 'agency_admin' | 'agency_analyst' | 'agency_readonly',
+    //     orgId: string,
+    //     counties: string[] }        // display spelling, e.g. "Lowndes"
+
+    function claims() {
+      return request.auth.token;
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function assignedCounties() {
+      return signedIn() && claims().counties is list ? claims().counties : [];
+    }
+
+    // County scope is a *permission*, never a preference. Every rollup read is
+    // gated on this, so a client that forgets to narrow its own query is
+    // refused rather than quietly served another agency's counties.
+    function mayReadCounty(county) {
+      return county in assignedCounties();
+    }
+
+    function isAgencyAdmin() {
+      return signedIn() && claims().role == 'agency_admin';
+    }
+
+    function canConfigureAlerts() {
+      return signedIn() && claims().role in ['agency_admin', 'agency_analyst'];
+    }
+
+    function ownsDoc(resource) {
+      return signedIn() && resource.data.orgId == claims().orgId;
+    }
+
+    // -- Rollups: read-only, county-scoped ---------------------------------
+
+    match /rollupsCountyDaily/{docId} {
+      allow read: if mayReadCounty(resource.data.county);
+      // Written only by Cloud Functions using the Admin SDK, which bypasses
+      // these rules. No client path exists on purpose.
+      allow write: if false;
+    }
+
+    match /rollupsPantryDaily/{docId} {
+      allow read: if mayReadCounty(resource.data.county);
+      allow write: if false;
+    }
+
+    // -- Directories -------------------------------------------------------
+
+    match /pantries/{pantryId} {
+      allow read: if mayReadCounty(resource.data.county);
+      allow write: if false;
+    }
+
+    // The item catalogue is names and categories — no counts, nothing
+    // agency-specific — so any signed-in agency user may read it. Demand
+    // figures live in the county rollups, which are scoped.
+    match /requestedItems/{itemId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    // County census measures are published ACS and USDA figures for all 67
+    // counties. They are public record, and the choropleth draws the whole
+    // state for geographic context, marking counties outside the agency's
+    // coverage as locked. Scoping this collection would leave holes in the map
+    // while protecting nothing.
+    match /countyMetrics/{fips} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    // -- Agency-owned configuration ----------------------------------------
+
+    match /thresholdAlerts/{alertId} {
+      allow read: if ownsDoc(resource);
+      allow create: if canConfigureAlerts()
+                    && request.resource.data.orgId == claims().orgId
+                    // `isTriggered` and `lastTriggered` are decided by the
+                    // evaluation job. A client that could set them could
+                    // manufacture an alert history.
+                    && request.resource.data.isTriggered == false
+                    && !('lastTriggered' in request.resource.data);
+      allow update: if canConfigureAlerts()
+                    && ownsDoc(resource)
+                    && request.resource.data.orgId == resource.data.orgId
+                    && request.resource.data.isTriggered == resource.data.isTriggered;
+      allow delete: if canConfigureAlerts() && ownsDoc(resource);
+    }
+
+    match /scheduledReports/{reportId} {
+      allow read: if ownsDoc(resource);
+      allow create: if canConfigureAlerts()
+                    && request.resource.data.orgId == claims().orgId
+                    // A schedule cannot deliver counties the agency cannot see.
+                    && (request.resource.data.countyScope == 'all'
+                        || mayReadCounty(request.resource.data.countyScope))
+                    // Run bookkeeping belongs to the scheduler.
+                    && !('lastRunAt' in request.resource.data);
+      allow update: if canConfigureAlerts()
+                    && ownsDoc(resource)
+                    && request.resource.data.orgId == resource.data.orgId
+                    && request.resource.data.lastRunAt == resource.data.lastRunAt;
+      allow delete: if isAgencyAdmin() && ownsDoc(resource);
+    }
+
+    // Anything not matched above is denied. Adding a collection means adding a
+    // rule for it, deliberately.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

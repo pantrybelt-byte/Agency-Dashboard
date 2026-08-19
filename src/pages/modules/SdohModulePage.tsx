@@ -12,51 +12,75 @@ import { ChartCard } from '../../components/ui/ChartCard';
 import { MetricCard } from '../../components/ui/MetricCard';
 import { DataTable } from '../../components/ui/DataTable';
 import { ModuleShell, SampleNotice } from './ModuleShell';
-import { mockFoodDesertZones, mockPantryMetrics } from '../../data/mockData';
+import { useModuleData } from './useModuleData';
 import { buildModuleExport } from '../../utils/moduleExports';
-import { exportToCSV } from '../../utils/csvExport';
-import { useAuth } from '../../hooks/useAuth';
+import { exportBundleToCSV } from '../../utils/csvExport';
 
 const HEDIS_TARGET = 75;
 
+/** "Lowndes County" as the pantry directory spells it: "Lowndes". */
+const plainCounty = (name: string) => name.replace(/\s+County$/, '');
+
 export const SdohModulePage: React.FC = () => {
-  const { user } = useAuth();
+  const { pantries, counties, totals, scopeLabel, periodLabel, agencyName, status, error, exportContext } =
+    useModuleData();
   const [tier, setTier] = useState<'all' | 'Critical' | 'At Risk'>('all');
 
-  const zipRows = useMemo(() => {
-    const rows = mockFoodDesertZones
-      .filter((zone) => tier === 'all' || zone.status === tier)
-      .flatMap((zone) =>
-        zone.zipCodes.map((zip) => ({
-          zip,
-          county: zone.county,
-          score: zone.foodAccessScore,
-          status: zone.status,
-          poverty: `${zone.percentBelowPoverty}%`,
-          distance: `${zone.nearestPantryMiles} mi`,
-          endpoints: mockPantryMetrics.filter((p) => p.county === zone.county).length,
-        })),
-      );
-    return rows.sort((a, b) => a.score - b.score);
-  }, [tier]);
+  const tieredCounties = useMemo(
+    () => counties.filter((county) => tier === 'all' || county.status === tier),
+    [counties, tier],
+  );
 
-  const screeningRate = Math.min(97, 62 + mockPantryMetrics.length * 1.6);
-  const referrals = mockPantryMetrics.length * 148;
+  const zipRows = useMemo(() => {
+    // Index the referral endpoints once rather than rescanning per ZIP row.
+    const endpointsByCounty = new Map<string, number>();
+    for (const pantry of pantries) {
+      endpointsByCounty.set(pantry.county, (endpointsByCounty.get(pantry.county) ?? 0) + 1);
+    }
+
+    return tieredCounties
+      .flatMap((county) =>
+        county.zipCodes.map((zip) => ({
+          zip,
+          county: plainCounty(county.name),
+          score: county.foodAccessScore,
+          status: county.status,
+          poverty: `${county.povertyRate}%`,
+          distance: `${county.nearestPantryMiles} mi`,
+          endpoints: endpointsByCounty.get(plainCounty(county.name)) ?? 0,
+        })),
+      )
+      .sort((a, b) => a.score - b.score);
+  }, [tieredCounties, pantries]);
+
+  // Modelled, and marked as such: there is no screening-documentation feed yet.
+  // Tying it to measured volume at least keeps it consistent with the scope and
+  // period on screen instead of being a constant that never moves.
+  const screeningRate = Math.min(97, 62 + pantries.length * 1.6);
+  const referrals = Math.round(totals.familiesServed * 0.42);
 
   const handleExport = () => {
-    const bundle = buildModuleExport('sdoh', {
-      pantries: mockPantryMetrics,
-      zones: mockFoodDesertZones,
-      countyScope: 'all',
-      periodLabel: 'current period',
-      agencyName: user?.organization ?? 'Health plan',
-      containsModelledFigures: true,
-    });
-    exportToCSV(bundle.filename, bundle.rows);
+    const bundle = buildModuleExport(
+      'sdoh',
+      exportContext({
+        counties: tieredCounties,
+        scopeSuffix: tier === 'all' ? undefined : tier.replace(/\s+/g, ''),
+        agencyName,
+        containsModelledFigures: true,
+      }),
+    );
+    exportBundleToCSV(bundle);
   };
 
   return (
-    <ModuleShell moduleId="sdoh" onExport={handleExport}>
+    <ModuleShell
+      moduleId="sdoh"
+      onExport={handleExport}
+      scopeLabel={scopeLabel}
+      periodLabel={periodLabel}
+      status={status}
+      error={error}
+    >
       <div className="space-y-5">
         <SampleNotice what="HEDIS screening compliance and closed-loop referral volume" />
 
@@ -71,6 +95,8 @@ export const SdohModulePage: React.FC = () => {
           <MetricCard
             label="Closed-Loop Referrals"
             value={referrals}
+            trend={totals.familiesTrend}
+            trendLabel="vs previous period"
             icon={<Repeat className="h-5 w-5 text-emerald-400" aria-hidden="true" />}
             glowClass="metric-glow-emerald"
             illustrative

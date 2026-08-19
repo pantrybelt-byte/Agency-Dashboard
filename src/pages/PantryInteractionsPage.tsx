@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   AreaChart, Area,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
@@ -7,7 +7,16 @@ import { MousePointerClick, ScanLine, Bell, Search, Navigation, TrendingUp, Arro
 import { MetricCard } from '../components/ui/MetricCard';
 import { ChartCard } from '../components/ui/ChartCard';
 import { DataTable } from '../components/ui/DataTable';
-import { mockDailyInteractions, mockPantryMetrics } from '../data/mockData';
+import { DataStateBoundary } from '../components/ui/DataStateBoundary';
+import {
+  combineStatus,
+  useCountyRollups,
+  usePantryDirectory,
+  usePantryRollups,
+} from '../hooks/useDashboardData';
+import { useDashboardFilters } from '../hooks/useDashboardFilters';
+import { interactionsSeries, pantryMetricsFor, summarise, totalsFor, growth } from '../utils/analytics';
+import { ALL_COUNTIES } from '../utils/scoping';
 import { exportToCSV } from '../utils/csvExport';
 
 const interactionColors = {
@@ -38,19 +47,41 @@ export const PantryInteractionsPage: React.FC = () => {
   const [selectedPantry, setSelectedPantry] = useState<string | null>(null);
   const [searchPantry, setSearchPantry] = useState('');
 
-  const totalCheckIns = mockDailyInteractions.reduce((s, d) => s + d.checkIns, 0);
-  const totalItemScans = mockDailyInteractions.reduce((s, d) => s + d.itemScans, 0);
-  const totalNotifications = mockDailyInteractions.reduce((s, d) => s + d.notificationViews, 0);
-  const totalSearches = mockDailyInteractions.reduce((s, d) => s + d.searches, 0);
+  const { countyScope, resolved } = useDashboardFilters();
+  const countyRollups = useCountyRollups();
+  const pantryRollups = usePantryRollups();
+  const directory = usePantryDirectory();
+  const { status, error } = combineStatus(countyRollups, pantryRollups, directory);
 
-  const sortedPantries = [...mockPantryMetrics]
-    .filter(p => p.name.toLowerCase().includes(searchPantry.toLowerCase()) || p.county.toLowerCase().includes(searchPantry.toLowerCase()))
-    .sort((a, b) => b.totalVisits - a.totalVisits);
+  const dailyInteractions = useMemo(
+    () => interactionsSeries(countyRollups.data.current),
+    [countyRollups.data],
+  );
 
-  const activePantry = selectedPantry ? mockPantryMetrics.find(p => p.id === selectedPantry) : null;
+  // Trends are the measured change against the equally sized window before
+  // this one. They used to be four literals against a period control that did
+  // not reach this page at all.
+  const totals = useMemo(() => summarise(countyRollups.data), [countyRollups.data]);
+  const previous = useMemo(() => totalsFor(countyRollups.data.previous), [countyRollups.data]);
+
+  const pantries = useMemo(
+    () => pantryMetricsFor(directory.data, pantryRollups.data),
+    [directory.data, pantryRollups.data],
+  );
+
+  const sortedPantries = useMemo(() => {
+    const term = searchPantry.toLowerCase();
+    return pantries
+      .filter(
+        (p) => p.name.toLowerCase().includes(term) || p.county.toLowerCase().includes(term),
+      )
+      .sort((a, b) => b.totalVisits - a.totalVisits);
+  }, [pantries, searchPantry]);
+
+  const activePantry = selectedPantry ? pantries.find((p) => p.id === selectedPantry) ?? null : null;
 
   const handleExportLeaderboardCSV = () => {
-    exportToCSV('Pantry_Leaderboard_Interactions', sortedPantries, [
+    exportToCSV(`Pantry_Leaderboard_${countyScope === ALL_COUNTIES ? 'AllAssigned' : countyScope}`, sortedPantries, [
       { key: 'name', label: 'Pantry Name' },
       { key: 'county', label: 'County' },
       { key: 'type', label: 'Type' },
@@ -63,39 +94,52 @@ export const PantryInteractionsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <DataStateBoundary
+        status={status}
+        error={error}
+        source={countyRollups.source}
+        isEmpty={status === 'ready' && dailyInteractions.length === 0}
+        emptyTitle="No interactions in scope"
+        emptyMessage={
+          countyScope === ALL_COUNTIES
+            ? 'No app activity was recorded for your counties in this period.'
+            : `${countyScope} County recorded no app activity in this period.`
+        }
+        skeletonRows={4}
+      >
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           label="Check-ins"
-          value={totalCheckIns}
-          trend={14.2}
-          trendLabel="vs last period"
+          value={totals.checkIns}
+          trend={growth(totals.checkIns, previous.checkIns)}
+          trendLabel={`vs previous ${resolved.dayCount} days`}
           icon={<MousePointerClick className="w-5 h-5 text-emerald-400" />}
           glowClass="metric-glow-emerald"
         />
         <MetricCard
           label="Item Scans"
-          value={totalItemScans}
-          trend={19.8}
-          trendLabel="vs last period"
+          value={totals.itemScans}
+          trend={growth(totals.itemScans, previous.itemScans)}
+          trendLabel={`vs previous ${resolved.dayCount} days`}
           icon={<ScanLine className="w-5 h-5 text-indigo-400" />}
           glowClass="metric-glow-indigo"
           animationDelay="delay-100"
         />
         <MetricCard
           label="Notification Views"
-          value={totalNotifications}
-          trend={23.1}
-          trendLabel="vs last period"
+          value={totals.notificationViews}
+          trend={growth(totals.notificationViews, previous.notificationViews)}
+          trendLabel={`vs previous ${resolved.dayCount} days`}
           icon={<Bell className="w-5 h-5 text-amber-400" />}
           glowClass="metric-glow-amber"
           animationDelay="delay-200"
         />
         <MetricCard
           label="Searches"
-          value={totalSearches}
-          trend={8.4}
-          trendLabel="vs last period"
+          value={totals.searches}
+          trend={growth(totals.searches, previous.searches)}
+          trendLabel={`vs previous ${resolved.dayCount} days`}
           icon={<Search className="w-5 h-5 text-blue-400" />}
           glowClass="metric-glow-blue"
           animationDelay="delay-300"
@@ -105,10 +149,10 @@ export const PantryInteractionsPage: React.FC = () => {
       {/* Daily Interactions Area Chart */}
       <ChartCard
         title="Daily Interactions"
-        subtitle="All interaction types across 30-day window"
+        subtitle={`All interaction types · ${resolved.label}`}
         dataTable={{
           columns: ['Date', 'Check-ins', 'Item scans', 'Notification views'],
-          rows: mockDailyInteractions.map((day) => [
+          rows: dailyInteractions.map((day) => [
             day.date,
             day.checkIns,
             day.itemScans,
@@ -118,7 +162,7 @@ export const PantryInteractionsPage: React.FC = () => {
       >
         <div className="h-[320px]">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={mockDailyInteractions} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+            <AreaChart data={dailyInteractions} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
               <defs>
                 <linearGradient id="checkInsGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={interactionColors.checkIns} stopOpacity={0.2} />
@@ -324,6 +368,7 @@ export const PantryInteractionsPage: React.FC = () => {
           )}
         </ChartCard>
       </div>
+      </DataStateBoundary>
     </div>
   );
 };

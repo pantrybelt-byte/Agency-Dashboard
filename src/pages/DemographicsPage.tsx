@@ -7,14 +7,15 @@ import { MetricCard } from '../components/ui/MetricCard';
 import { ChartCard } from '../components/ui/ChartCard';
 import { DataTable } from '../components/ui/DataTable';
 import { SegmentFilter } from '../components/ui/SegmentFilter';
-import { mockDemographics, mockCurrentUser } from '../data/mockData';
+import { DataStateBoundary } from '../components/ui/DataStateBoundary';
 import { useDashboardFilters } from '../hooks/useDashboardFilters';
-import { useAuth } from '../hooks/useAuth';
+import { useCountyRollups } from '../hooks/useDashboardData';
+import { demographicsFor } from '../utils/analytics';
+import { ZIP_DIRECTORY } from '../data/zipDirectory';
 import {
   ALL_COUNTIES,
   AGE_GROUP_FOR_SEGMENT,
   VISITOR_TYPE_FOR_SEGMENT,
-  resolveVisibleCounties,
   segmentLabel,
   segmentShare,
 } from '../utils/scoping';
@@ -28,10 +29,6 @@ import {
   countByVisitorType,
 } from '../utils/demographics';
 import type { DemographicSegment } from '../types';
-
-interface DemographicsPageProps {
-  countyScope?: string;
-}
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string; color: string }>; label?: string }) => {
   if (!active || !payload) return null;
@@ -47,28 +44,26 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   );
 };
 
-export const DemographicsPage: React.FC<DemographicsPageProps> = ({ countyScope: propCountyScope }) => {
-  const demographics = mockDemographics;
+export const DemographicsPage: React.FC = () => {
   const filters = useDashboardFilters();
-  const auth = useAuth();
-  
-  const [localSegment, setLocalSegment] = useState<DemographicSegment>('all');
+  const rollups = useCountyRollups();
+
   const [searchTerm, setSearchTerm] = useState('');
 
-  const countyScope = propCountyScope || filters.countyScope || ALL_COUNTIES;
-  const demographicSegment = filters.demographicSegment !== 'all' ? filters.demographicSegment : localSegment;
-  const handleSegmentChange = (seg: DemographicSegment) => {
-    setLocalSegment(seg);
-    if (filters.setDemographicSegment) {
-      filters.setDemographicSegment(seg);
-    }
-  };
+  const countyScope = filters.countyScope;
+  const demographicSegment = filters.demographicSegment;
+  const handleSegmentChange = (seg: DemographicSegment) => filters.setDemographicSegment(seg);
 
-  const user = auth.user || mockCurrentUser;
-
-  const visibleCounties = useMemo(
-    () => resolveVisibleCounties(user?.assignedCounties ?? ['Montgomery', 'Autauga', 'Elmore', 'Lowndes', 'Macon', 'Dallas'], countyScope),
-    [user, countyScope],
+  /**
+   * The composition of whatever counties and days are in scope.
+   *
+   * Previously the charts and the ZIP table disagreed: the table filtered by
+   * county while the KPI cards above it kept reporting the whole region, so one
+   * screen answered the same question two ways.
+   */
+  const demographics = useMemo(
+    () => demographicsFor(rollups.data, ZIP_DIRECTORY),
+    [rollups.data],
   );
 
   const segmentFraction = useMemo(
@@ -81,13 +76,11 @@ export const DemographicsPage: React.FC<DemographicsPageProps> = ({ countyScope:
 
   const scopedZipCodes = useMemo(
     () =>
-      demographics.zipCodeBreakdown
-        .filter((item) => visibleCounties.length === 0 || visibleCounties.includes(item.county))
-        .map((item) => ({
-          ...item,
-          familiesServed: Math.round(item.familiesServed * segmentFraction),
-        })),
-    [demographics.zipCodeBreakdown, visibleCounties, segmentFraction],
+      demographics.zipCodeBreakdown.map((item) => ({
+        ...item,
+        familiesServed: Math.round(item.familiesServed * segmentFraction),
+      })),
+    [demographics.zipCodeBreakdown, segmentFraction],
   );
 
   const childrenServed = countByAgeGroup(demographics, AGE_GROUP_CHILDREN);
@@ -108,12 +101,25 @@ export const DemographicsPage: React.FC<DemographicsPageProps> = ({ countyScope:
       { key: 'community', label: 'Community / Neighborhood' },
       { key: 'county', label: 'County' },
       { key: 'familiesServed', label: 'Families Served' },
-      { key: 'growthRate', label: 'Growth Rate (%)' },
+      { key: 'growthRate', label: 'Growth Rate vs Previous Period (%)' },
     ]);
   };
 
   return (
     <div className="space-y-6">
+      <DataStateBoundary
+        status={rollups.status}
+        error={rollups.error}
+        source={rollups.source}
+        isEmpty={rollups.status === 'ready' && rollups.data.current.length === 0}
+        emptyTitle="No demographic rollups in scope"
+        emptyMessage={
+          countyScope === ALL_COUNTIES
+            ? 'No counties are reporting for this period yet. Widen the date range in the header.'
+            : `${countyScope} County has no reporting activity in this period.`
+        }
+        skeletonRows={4}
+      >
       {/* Top Compliance Notice Bar */}
       <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -125,7 +131,8 @@ export const DemographicsPage: React.FC<DemographicsPageProps> = ({ countyScope:
             <p className="text-[12px] text-slate-300">
               Community demographics, household composition, visitor frequency, and census ZIP metrics
               {countyScope !== ALL_COUNTIES && ` for ${countyScope} County`}
-              {demographicSegment !== 'all' && ` · ${segmentLabel(demographicSegment)}`}.
+              {demographicSegment !== 'all' && ` · ${segmentLabel(demographicSegment)}`}
+              {` · ${filters.resolved.label}`}.
             </p>
           </div>
         </div>
@@ -406,6 +413,7 @@ export const DemographicsPage: React.FC<DemographicsPageProps> = ({ countyScope:
           />
         </ChartCard>
       </div>
+      </DataStateBoundary>
     </div>
   );
 };

@@ -5,14 +5,7 @@
  * these are the numbers an agency reports to a funder, so "roughly right" is
  * not good enough.
  */
-import type {
-  DailyInteractionData,
-  DemographicSegment,
-  DemographicsData,
-  PantryMetric,
-  RegionSummary,
-  TimeSeriesDataPoint,
-} from '../types';
+import type { DemographicSegment, DemographicsData } from '../types';
 import { AGE_GROUP_CHILDREN, AGE_GROUP_SENIORS } from './demographics';
 
 /** Sentinel meaning "every county the signed-in user is assigned to". */
@@ -103,76 +96,42 @@ export function resolveVisibleCounties(assignedCounties: string[], countyScope: 
   return assignedCounties.includes(countyScope) ? [countyScope] : [];
 }
 
-export function filterPantriesByScope(pantries: PantryMetric[], visibleCounties: string[]): PantryMetric[] {
-  return pantries.filter((pantry) => visibleCounties.includes(pantry.county));
+/**
+ * The per-pantry summing, series windowing and county weighting that used to
+ * live here are gone: they existed because the dashboard held one fixed
+ * 30-point series and had to approximate any other window from it. The data
+ * layer now queries the requested window directly, so those approximations
+ * would only be a second, disagreeing answer. See `utils/analytics.ts`.
+ */
+
+/**
+ * County-scope names and choropleth county records use different vocabularies:
+ * `assignedCounties` holds bare names ('Lowndes'), the map dataset holds
+ * `id: 'lowndes'` and `name: 'Lowndes County'`. Normalising both sides means
+ * the join survives punctuation ('St. Clair') and casing ('DeKalb') without
+ * depending on the id convention holding.
+ */
+export function normaliseCountyKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/\s+county$/, '')
+    .replace(/[^a-z0-9]/g, '');
 }
 
 /**
- * Recompute the region summary from whatever pantries are in scope.
- *
- * The trend percentages stay as supplied: a trend is a property of the time
- * series, not something that can be re-derived from a single period's totals.
+ * Translate county-scope names into the ids used by the choropleth dataset.
+ * Names with no matching county are dropped rather than passed through, so a
+ * typo narrows the map to nothing visible instead of silently widening it.
  */
-export function summarisePantries(
-  pantries: PantryMetric[],
-  base: RegionSummary,
-  segment: DemographicSegment,
-  segmentFraction: number,
-): RegionSummary {
-  const totalFamiliesServed = pantries.reduce((sum, pantry) => sum + pantry.familiesServed, 0);
-  const totalItemsDistributed = pantries.reduce((sum, pantry) => sum + pantry.totalItemsDistributed, 0);
-  const activePantries = pantries.filter((pantry) => pantry.isActive).length;
-  const scale = segment === 'all' ? 1 : segmentFraction;
-
-  return {
-    ...base,
-    totalPantries: pantries.length,
-    activePantries,
-    totalFamiliesServed: Math.round(totalFamiliesServed * scale),
-    totalItemsDistributed: Math.round(totalItemsDistributed * scale),
-  };
-}
-
-/**
- * Narrow a time series to the requested window and cohort.
- *
- * Demonstration data holds a fixed 30-point series, so a 7-day request takes
- * the trailing 7 points and a 90-day request cannot invent more than 30. Live
- * rollups will be queried by date instead; this keeps the control meaningful
- * in the meantime.
- */
-export function scaleSeries(
-  series: TimeSeriesDataPoint[],
-  dayCount: number,
-  segmentFraction: number,
-): TimeSeriesDataPoint[] {
-  const windowed = series.slice(Math.max(0, series.length - dayCount));
-  if (segmentFraction === 1) return windowed;
-
-  return windowed.map((point) => ({
-    ...point,
-    value: Math.round(point.value * segmentFraction),
-    previousValue:
-      point.previousValue === undefined ? undefined : Math.round(point.previousValue * segmentFraction),
-  }));
-}
-
-/** Same windowing rule as `scaleSeries`, for the interaction rollups. */
-export function windowInteractions(
-  interactions: DailyInteractionData[],
-  dayCount: number,
-): DailyInteractionData[] {
-  return interactions.slice(Math.max(0, interactions.length - dayCount));
-}
-
-/**
- * Proportion of a whole-region figure attributable to the counties in scope,
- * weighted by families served. Used for figures the dashboard only has at
- * region level.
- */
-export function countyWeight(allPantries: PantryMetric[], scopedPantries: PantryMetric[]): number {
-  const total = allPantries.reduce((sum, pantry) => sum + pantry.familiesServed, 0);
-  if (total === 0) return 0;
-  const scoped = scopedPantries.reduce((sum, pantry) => sum + pantry.familiesServed, 0);
-  return scoped / total;
+export function countyIdsForNames(
+  counties: { id: string; name: string }[],
+  names: string[],
+): string[] {
+  const byKey = new Map(counties.map((county) => [normaliseCountyKey(county.name), county.id]));
+  const ids: string[] = [];
+  for (const name of names) {
+    const id = byKey.get(normaliseCountyKey(name));
+    if (id) ids.push(id);
+  }
+  return ids;
 }

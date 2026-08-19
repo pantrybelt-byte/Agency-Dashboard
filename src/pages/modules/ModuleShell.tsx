@@ -8,19 +8,34 @@
  * consistent presentation of the product wherever they land.
  */
 import React from 'react';
-import { Printer, Download } from 'lucide-react';
+import { Printer, Download, MapPin, CalendarRange } from 'lucide-react';
 import { ACCENTS, formatPriceBand, getPreset, type PresetId } from '../../config/presets';
 import { ModuleGate } from '../../components/ui/ModuleGate';
+import { DataStateBoundary } from '../../components/ui/DataStateBoundary';
 import { EntitlementBadge } from '../../components/ui/StatusBadge';
 import { usePreset } from '../../hooks/usePreset';
+import type { DataStatus } from '../../hooks/useLiveData';
 
 interface ModuleShellProps {
   moduleId: PresetId;
   onExport?: () => void;
+  /** What the figures on this page cover. Rendered as a coverage strip. */
+  scopeLabel?: string;
+  periodLabel?: string;
+  status?: DataStatus;
+  error?: Error | null;
   children: React.ReactNode;
 }
 
-export const ModuleShell: React.FC<ModuleShellProps> = ({ moduleId, onExport, children }) => {
+export const ModuleShell: React.FC<ModuleShellProps> = ({
+  moduleId,
+  onExport,
+  scopeLabel,
+  periodLabel,
+  status = 'ready',
+  error = null,
+  children,
+}) => {
   const { isUnlocked } = usePreset();
   const preset = getPreset(moduleId);
   const accent = ACCENTS[preset.accent];
@@ -81,7 +96,36 @@ export const ModuleShell: React.FC<ModuleShellProps> = ({ moduleId, onExport, ch
         </div>
       </section>
 
-      <ModuleGate moduleId={moduleId}>{children}</ModuleGate>
+      {/* Coverage strip. A module page shows figures for a scope and a period
+          that were chosen in the header two sections away; saying so on the
+          page is what stops a screenshot from losing that context. */}
+      {unlocked && (scopeLabel || periodLabel) && (
+        <div className="card flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3">
+          {scopeLabel && (
+            <span className="flex items-center gap-1.5 text-[12px] text-slate-300">
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+              <span className="text-slate-400">Coverage</span>
+              <span className="font-semibold text-white">{scopeLabel}</span>
+            </span>
+          )}
+          {periodLabel && (
+            <span className="flex items-center gap-1.5 text-[12px] text-slate-300">
+              <CalendarRange className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+              <span className="text-slate-400">Period</span>
+              <span className="font-semibold text-white">{periodLabel}</span>
+            </span>
+          )}
+          <span className="text-[11px] text-slate-400">
+            Change either in the dashboard header; every figure below follows.
+          </span>
+        </div>
+      )}
+
+      <ModuleGate moduleId={moduleId}>
+        <DataStateBoundary status={status} error={error} source="demo" skeletonRows={4}>
+          {children}
+        </DataStateBoundary>
+      </ModuleGate>
     </div>
   );
 };

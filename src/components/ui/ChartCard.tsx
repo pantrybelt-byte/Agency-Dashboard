@@ -31,7 +31,11 @@ export const ChartCard: React.FC<ChartCardProps> = ({
   const headingId = useId();
 
   return (
-    <section aria-labelledby={headingId} className={`card p-5 ${className}`}>
+    // `min-w-0` is load-bearing: these cards sit in grid and flex tracks whose
+    // default `min-width: auto` refuses to shrink below their content. Without
+    // it a wide table inside an `overflow-x-auto` wrapper widened the whole
+    // page instead of scrolling inside its own card.
+    <section aria-labelledby={headingId} className={`card min-w-0 p-5 ${className}`}>
       <div className="flex items-start justify-between mb-5 gap-3">
         <div className="min-w-0">
           <h2 id={headingId} className="text-[14px] font-semibold text-white">

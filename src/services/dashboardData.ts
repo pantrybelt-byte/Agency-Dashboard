@@ -3,13 +3,32 @@
  *
  * Every page reads through these subscriptions. When `VITE_USE_FIREBASE=true`
  * and the config is complete they attach Firestore `onSnapshot` listeners;
- * otherwise they serve demonstration data from an in-memory store. The two
- * paths expose an identical surface, so no component knows which is active.
+ * otherwise they serve demonstration rollups generated to the identical shape.
+ * The two paths expose the same surface, so no component knows which is active.
+ *
+ * ---------------------------------------------------------------------------
+ * Queries are scoped, not filtered afterwards
+ * ---------------------------------------------------------------------------
+ *
+ * Subscriptions take a `DataQuery` carrying the counties the agency may see and
+ * the date window the user picked, and push both into the Firestore query. That
+ * matters for three reasons:
+ *
+ * - **Cost.** A 30-day, eight-county view reads 240 rollup documents rather
+ *   than the entire collection.
+ * - **Correctness.** County scope stops being a cosmetic filter applied after
+ *   the data arrives, which is what made it so easy to forget on a page.
+ * - **Security.** The query mirrors what the rules permit, so a rule denial
+ *   surfaces as a failed query in development rather than as a silent gap
+ *   between what the client asked for and what it was allowed to have.
+ *
+ * Every window is fetched together with the equally sized window before it, so
+ * period-over-period growth is computed from data rather than typed in.
  *
  * Firestore documents are parsed defensively — a malformed document is skipped
  * with a console warning rather than being allowed to white-screen the
- * dashboard. Real rollup data will eventually be written by Cloud Functions,
- * but "eventually" includes a period where the schema is still moving.
+ * dashboard. Rollups are written by Cloud Functions, and "written by a job"
+ * includes a period where the job is still being changed.
  */
 import {
   collection,
@@ -19,19 +38,26 @@ import {
   orderBy,
   query,
   setDoc,
+  where,
   type DocumentData,
+  type Query,
   type QuerySnapshot,
 } from 'firebase/firestore';
-import { COLLECTIONS, getDb, isFirebaseEnabled } from './firebase';
+import { getDb, isFirebaseEnabled } from './firebase';
 import { DemoCollection } from './demoStore';
-import { mockDailyInteractions, mockPantryMetrics, mockThresholdAlerts } from '../data/mockData';
+import {
+  COLLECTIONS,
+  type CountyDailyDoc,
+  type PantryDailyDoc,
+  type PantryDoc,
+  type RequestedItemDoc,
+} from '../data/schema';
+import { buildCountyDaily, buildPantryDaily, datesBetween } from '../data/demoRollups';
+import { mockPantryMetrics, mockRequestedItems, mockThresholdAlerts } from '../data/mockData';
 import { alabamaCounties, type AlabamaCountyData } from '../data/alabamaCounties';
-import type {
-  DailyInteractionData,
-  PantryMetric,
-  ScheduledReport,
-  ThresholdAlert,
-} from '../types';
+import type { ScheduledReport, ThresholdAlert } from '../types';
+
+export { COLLECTIONS } from '../data/schema';
 
 export type Unsubscribe = () => void;
 export type DataSource = 'firestore' | 'demo';
@@ -41,15 +67,52 @@ export type Subscribe<T> = (
   onError: (error: Error) => void,
 ) => Unsubscribe;
 
+/**
+ * What a page is asking for. Both dimensions are required: omitting either one
+ * is how a page ends up quietly reporting on counties or periods the user did
+ * not ask about.
+ */
+export interface DataQuery {
+  /** Counties in scope, in display spelling. An empty array legitimately means "nothing". */
+  counties: string[];
+  startDate: string;
+  endDate: string;
+  /** The equally sized window immediately before, for period-over-period growth. */
+  previousStartDate: string;
+  previousEndDate: string;
+}
+
+/** A window and its predecessor, so growth never needs a second round trip. */
+export interface RollupWindow<T> {
+  current: T[];
+  previous: T[];
+}
+
+/** Firestore caps `in` at 30 values. Beyond that the filter moves client-side. */
+const MAX_IN_VALUES = 30;
+
 // ---------------------------------------------------------------------------
-// Demonstration stores
+// Directory records the UI consumes
 // ---------------------------------------------------------------------------
 
-const demoPantries = new DemoCollection<PantryMetric>(mockPantryMetrics);
-const demoInteractions = new DemoCollection<DailyInteractionData>(mockDailyInteractions);
-const demoCounties = new DemoCollection<AlabamaCountyData>(alabamaCounties);
-const demoAlerts = new DemoCollection<ThresholdAlert>(mockThresholdAlerts);
-const demoScheduledReports = new DemoCollection<ScheduledReport>([]);
+export interface PantryProfile {
+  id: string;
+  name: string;
+  county: string;
+  address: string;
+  city: string;
+  state: string;
+  zip?: string;
+  coordinates: { lat: number; lng: number };
+  type: PantryDoc['type'];
+  isActive: boolean;
+  topItems: string[];
+  updatedAt: string;
+}
+
+export interface ItemCatalogueEntry extends RequestedItemDoc {
+  id: string;
+}
 
 // ---------------------------------------------------------------------------
 // Defensive parsing
@@ -66,10 +129,16 @@ const bool = (value: unknown, fallback = false): boolean =>
 const strArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 
-/**
- * Map a Firestore snapshot through a parser, dropping documents the parser
- * rejects. One bad document must not take down a whole collection.
- */
+/** Coerce a `Record<string, number>` map, dropping anything that is not numeric. */
+const numMap = (value: unknown): Record<string, number> => {
+  if (!isRecord(value)) return {};
+  const result: Record<string, number> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === 'number' && Number.isFinite(entry)) result[key] = entry;
+  }
+  return result;
+};
+
 function parseSnapshot<T>(
   snapshot: QuerySnapshot<DocumentData>,
   label: string,
@@ -94,7 +163,7 @@ function parseSnapshot<T>(
   return results;
 }
 
-function parsePantry(id: string, data: DocumentData): PantryMetric | null {
+function parsePantryProfile(id: string, data: DocumentData): PantryProfile | null {
   if (!isRecord(data) || typeof data.name !== 'string') return null;
   const coordinates = isRecord(data.coordinates) ? data.coordinates : {};
 
@@ -107,37 +176,65 @@ function parsePantry(id: string, data: DocumentData): PantryMetric | null {
     state: str(data.state, 'AL'),
     zip: typeof data.zip === 'string' ? data.zip : undefined,
     coordinates: { lat: num(coordinates.lat), lng: num(coordinates.lng) },
-    type: str(data.type, 'Walk-in') as PantryMetric['type'],
-    totalVisits: num(data.totalVisits),
-    totalItemsDistributed: num(data.totalItemsDistributed),
-    familiesServed: num(data.familiesServed),
-    avgDailyVisits: num(data.avgDailyVisits),
-    growthRate: num(data.growthRate),
-    topItems: strArray(data.topItems),
+    type: str(data.type, 'Walk-in') as PantryDoc['type'],
     isActive: bool(data.isActive, true),
-    lastUpdated: str(data.lastUpdated, 'unknown'),
+    topItems: strArray(data.topItems),
+    updatedAt: str(data.updatedAt, ''),
   };
 }
 
-function parseInteraction(id: string, data: DocumentData): DailyInteractionData | null {
+function parseCountyDaily(_id: string, data: DocumentData): CountyDailyDoc | null {
   if (!isRecord(data)) return null;
-  const date = str(data.date, id);
-  if (!date) return null;
-
-  const checkIns = num(data.checkIns);
-  const itemScans = num(data.itemScans);
-  const notificationViews = num(data.notificationViews);
-  const searches = num(data.searches);
-  const directions = num(data.directions);
+  const county = str(data.county);
+  const date = str(data.date);
+  // Without both keys the document cannot be placed in a window or a scope,
+  // which makes it worse than absent.
+  if (!county || !date) return null;
 
   return {
+    county,
     date,
-    checkIns,
-    itemScans,
-    notificationViews,
-    searches,
-    directions,
-    total: num(data.total, checkIns + itemScans + notificationViews + searches + directions),
+    familiesServed: num(data.familiesServed),
+    individualsServed: num(data.individualsServed, num(data.familiesServed)),
+    itemsDistributed: num(data.itemsDistributed),
+    visits: num(data.visits),
+    checkIns: num(data.checkIns),
+    itemScans: num(data.itemScans),
+    notificationViews: num(data.notificationViews),
+    searches: num(data.searches),
+    directions: num(data.directions),
+    ageGroups: numMap(data.ageGroups),
+    visitorTypes: numMap(data.visitorTypes),
+    householdSizes: numMap(data.householdSizes),
+    ethnicity: numMap(data.ethnicity),
+    zips: numMap(data.zips),
+    items: numMap(data.items),
+    categories: numMap(data.categories),
+  };
+}
+
+function parsePantryDaily(_id: string, data: DocumentData): PantryDailyDoc | null {
+  if (!isRecord(data)) return null;
+  const pantryId = str(data.pantryId);
+  const date = str(data.date);
+  if (!pantryId || !date) return null;
+
+  return {
+    pantryId,
+    county: str(data.county),
+    date,
+    visits: num(data.visits),
+    itemsDistributed: num(data.itemsDistributed),
+    familiesServed: num(data.familiesServed),
+  };
+}
+
+function parseItemCatalogue(id: string, data: DocumentData): ItemCatalogueEntry | null {
+  if (!isRecord(data) || typeof data.name !== 'string') return null;
+  return {
+    id,
+    name: data.name,
+    category: str(data.category, 'Canned Goods') as RequestedItemDoc['category'],
   };
 }
 
@@ -181,6 +278,7 @@ function parseThresholdAlert(id: string, data: DocumentData): ThresholdAlert | n
 
   return {
     id,
+    orgId: str(data.orgId),
     metric: data.metric,
     countyOrPantry: str(data.countyOrPantry),
     condition: str(data.condition, 'less_than') as ThresholdAlert['condition'],
@@ -197,6 +295,7 @@ function parseScheduledReport(id: string, data: DocumentData): ScheduledReport |
 
   return {
     id,
+    orgId: str(data.orgId),
     templateId: data.templateId,
     templateName: str(data.templateName, data.templateId),
     frequency: str(data.frequency, 'monthly') as ScheduledReport['frequency'],
@@ -213,15 +312,135 @@ function parseScheduledReport(id: string, data: DocumentData): ScheduledReport |
 }
 
 // ---------------------------------------------------------------------------
+// Demonstration stores
+// ---------------------------------------------------------------------------
+
+const demoCounties = new DemoCollection<AlabamaCountyData>(alabamaCounties);
+const demoAlerts = new DemoCollection<ThresholdAlert>(mockThresholdAlerts);
+const demoScheduledReports = new DemoCollection<ScheduledReport>([]);
+
+/** The pantry directory, reduced to the attributes that genuinely do not vary by day. */
+const demoPantryDirectory: PantryProfile[] = mockPantryMetrics.map((pantry) => ({
+  id: pantry.id,
+  name: pantry.name,
+  county: pantry.county,
+  address: pantry.address,
+  city: pantry.city,
+  state: pantry.state,
+  zip: pantry.zip,
+  coordinates: pantry.coordinates,
+  type: pantry.type,
+  isActive: pantry.isActive,
+  topItems: pantry.topItems,
+  updatedAt: pantry.lastUpdated,
+}));
+
+const demoItemCatalogue: ItemCatalogueEntry[] = mockRequestedItems.map((item) => ({
+  id: item.id,
+  name: item.name,
+  category: item.category,
+}));
+
+// ---------------------------------------------------------------------------
 // Subscription plumbing
 // ---------------------------------------------------------------------------
 
+/** Emit a fixed value asynchronously, so demo and Firestore share the same timing shape. */
+function emitOnce<T>(value: T, onData: (data: T, source: DataSource) => void): Unsubscribe {
+  let cancelled = false;
+  queueMicrotask(() => {
+    if (!cancelled) onData(value, 'demo');
+  });
+  return () => {
+    cancelled = true;
+  };
+}
+
 /**
- * Build a subscription that prefers Firestore and falls back to the demo
- * store. The fallback also catches a listener that errors *after* attaching —
- * a revoked rule or dropped connection leaves the dashboard populated rather
- * than blank.
+ * Apply the county constraint to a Firestore query when it fits in an `in`
+ * filter. Above 30 counties the filter is dropped and applied on arrival —
+ * security rules still bound what can come back, so this trades read volume for
+ * a query Firestore will actually accept.
  */
+function withCountyFilter(
+  base: Query<DocumentData>,
+  counties: string[],
+): { q: Query<DocumentData>; needsClientFilter: boolean } {
+  if (counties.length === 0 || counties.length > MAX_IN_VALUES) {
+    if (counties.length > MAX_IN_VALUES) {
+      console.warn(
+        `[data] ${counties.length} counties exceeds Firestore's ${MAX_IN_VALUES}-value "in" limit; ` +
+          'narrowing on the client instead.',
+      );
+    }
+    return { q: base, needsClientFilter: counties.length > 0 };
+  }
+  return { q: query(base, where('county', 'in', counties)), needsClientFilter: false };
+}
+
+/** Split a combined fetch back into the requested window and its predecessor. */
+function splitWindow<T extends { date: string }>(rows: T[], q: DataQuery): RollupWindow<T> {
+  const current: T[] = [];
+  const previous: T[] = [];
+  for (const row of rows) {
+    if (row.date >= q.startDate && row.date <= q.endDate) current.push(row);
+    else if (row.date >= q.previousStartDate && row.date <= q.previousEndDate) previous.push(row);
+  }
+  return { current, previous };
+}
+
+/**
+ * Build a windowed rollup subscription.
+ *
+ * Both windows are fetched in one listener spanning `previousStartDate` to
+ * `endDate`, then split on arrival. Two listeners would double the cost of
+ * answering what is really one range query.
+ */
+function createWindowedSubscription<T extends { date: string; county: string }>(
+  collectionName: string,
+  parse: (id: string, data: DocumentData) => T | null,
+  buildDemo: (q: DataQuery) => T[],
+): (q: DataQuery) => Subscribe<RollupWindow<T>> {
+  return (q) => (onData, onError) => {
+    const db = isFirebaseEnabled() ? getDb() : null;
+
+    if (!db) {
+      return emitOnce(splitWindow(buildDemo(q), q), onData);
+    }
+
+    try {
+      const { q: scoped, needsClientFilter } = withCountyFilter(collection(db, collectionName), q.counties);
+      const ranged = query(
+        scoped,
+        where('date', '>=', q.previousStartDate),
+        where('date', '<=', q.endDate),
+        orderBy('date'),
+      );
+
+      const permitted = new Set(q.counties);
+
+      return onSnapshot(
+        ranged,
+        (snapshot) => {
+          let rows = parseSnapshot(snapshot, collectionName, parse);
+          if (needsClientFilter) rows = rows.filter((row) => permitted.has(row.county));
+          onData(splitWindow(rows, q), 'firestore');
+        },
+        (error) => {
+          console.error(`[data] ${collectionName} listener failed, serving demo data:`, error);
+          onError(error instanceof Error ? error : new Error(String(error)));
+          onData(splitWindow(buildDemo(q), q), 'demo');
+        },
+      );
+    } catch (error) {
+      console.error(`[data] could not attach ${collectionName} listener:`, error);
+      onError(error instanceof Error ? error : new Error(String(error)));
+      return emitOnce(splitWindow(buildDemo(q), q), onData);
+    }
+  };
+}
+
+/** Build a plain, unwindowed subscription over a whole collection. */
 function createSubscription<T>(
   collectionName: string,
   parse: (id: string, data: DocumentData) => T | null,
@@ -256,19 +475,100 @@ function createSubscription<T>(
   };
 }
 
-export const subscribePantries: Subscribe<PantryMetric[]> = createSubscription(
-  COLLECTIONS.pantries,
-  parsePantry,
-  demoPantries,
+// ---------------------------------------------------------------------------
+// Windowed rollups
+// ---------------------------------------------------------------------------
+
+export const countyRollupQuery = createWindowedSubscription<CountyDailyDoc>(
+  COLLECTIONS.countyDaily,
+  parseCountyDaily,
+  (q) => {
+    const dates = datesBetween(q.previousStartDate, q.endDate);
+    return q.counties.flatMap((county) => dates.map((date) => buildCountyDaily(county, date)));
+  },
 );
 
-export const subscribeDailyInteractions: Subscribe<DailyInteractionData[]> = createSubscription(
-  COLLECTIONS.dailyInteractions,
-  parseInteraction,
-  demoInteractions,
-  'date',
+export const pantryRollupQuery = createWindowedSubscription<PantryDailyDoc>(
+  COLLECTIONS.pantryDaily,
+  parsePantryDaily,
+  (q) => {
+    const dates = datesBetween(q.previousStartDate, q.endDate);
+    const inScope = new Set(q.counties);
+    return demoPantryDirectory
+      .filter((pantry) => inScope.has(pantry.county))
+      .flatMap((pantry) => dates.map((date) => buildPantryDaily(pantry, date)));
+  },
 );
 
+// ---------------------------------------------------------------------------
+// Directory subscriptions
+// ---------------------------------------------------------------------------
+
+export function pantryDirectoryQuery(counties: string[]): Subscribe<PantryProfile[]> {
+  const inScope = new Set(counties);
+  const demoRows = () => demoPantryDirectory.filter((pantry) => inScope.has(pantry.county));
+
+  return (onData, onError) => {
+    const db = isFirebaseEnabled() ? getDb() : null;
+    if (!db) return emitOnce(demoRows(), onData);
+
+    try {
+      const { q, needsClientFilter } = withCountyFilter(collection(db, COLLECTIONS.pantries), counties);
+
+      return onSnapshot(
+        query(q, orderBy('name')),
+        (snapshot) => {
+          let rows = parseSnapshot(snapshot, COLLECTIONS.pantries, parsePantryProfile);
+          if (needsClientFilter) rows = rows.filter((row) => inScope.has(row.county));
+          onData(rows, 'firestore');
+        },
+        (error) => {
+          console.error('[data] pantry directory listener failed, serving demo data:', error);
+          onError(error instanceof Error ? error : new Error(String(error)));
+          onData(demoRows(), 'demo');
+        },
+      );
+    } catch (error) {
+      console.error('[data] could not attach pantry directory listener:', error);
+      onError(error instanceof Error ? error : new Error(String(error)));
+      return emitOnce(demoRows(), onData);
+    }
+  };
+}
+
+export const subscribeItemCatalogue: Subscribe<ItemCatalogueEntry[]> = (onData, onError) => {
+  const db = isFirebaseEnabled() ? getDb() : null;
+  if (!db) return emitOnce(demoItemCatalogue, onData);
+
+  try {
+    return onSnapshot(
+      query(collection(db, COLLECTIONS.requestedItems), orderBy('name')),
+      (snapshot) =>
+        onData(parseSnapshot(snapshot, COLLECTIONS.requestedItems, parseItemCatalogue), 'firestore'),
+      (error) => {
+        console.error('[data] item catalogue listener failed, serving demo data:', error);
+        onError(error instanceof Error ? error : new Error(String(error)));
+        onData(demoItemCatalogue, 'demo');
+      },
+    );
+  } catch (error) {
+    console.error('[data] could not attach item catalogue listener:', error);
+    onError(error instanceof Error ? error : new Error(String(error)));
+    return emitOnce(demoItemCatalogue, onData);
+  }
+};
+
+/**
+ * County census measures for the whole state.
+ *
+ * Deliberately *not* county-filtered: the choropleth draws all 67 counties for
+ * geographic context and marks the ones outside the agency's coverage as
+ * locked. Filtering here would leave holes in the map instead.
+ *
+ * Deliberately *not* date-filtered either: these are annual ACS and USDA
+ * figures with a published vintage, and they must not appear to move when
+ * someone picks "last 7 days".
+ */
 export const subscribeCountyMetrics: Subscribe<AlabamaCountyData[]> = createSubscription(
   COLLECTIONS.countyMetrics,
   parseCountyMetric,

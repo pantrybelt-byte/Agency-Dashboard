@@ -30,6 +30,7 @@ export const SettingsPage: React.FC = () => {
     e.preventDefault();
     await saveThresholdAlert({
       id: `alt_${Date.now()}`,
+      orgId: user.orgId,
       metric: newMetric,
       countyOrPantry: newCounty,
       condition: 'less_than',
@@ -261,7 +262,7 @@ export const SettingsPage: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <code className="flex-1 px-3 py-2 rounded-lg bg-[#0f1117] border border-white/[0.06] text-[12px] text-slate-400 font-mono">
+              <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap px-3 py-2 rounded-lg bg-[#0f1117] border border-white/[0.06] text-[12px] text-slate-400 font-mono">
                 VITE_FIREBASE_API_KEY=AIzaSyA••••••••••••••••••••
               </code>
               <button className="px-3 py-2 rounded-lg text-[12px] font-medium text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors cursor-pointer">

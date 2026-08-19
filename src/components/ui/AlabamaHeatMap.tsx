@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Search, Filter, ZoomIn, ZoomOut, RotateCcw, ShoppingBag } from 'lucide-react';
+import { Search, Filter, ZoomIn, ZoomOut, RotateCcw, ShoppingBag, Lock } from 'lucide-react';
 import {
   alabamaCounties as staticCounties,
   getCountyColor,
@@ -18,10 +18,31 @@ interface AlabamaHeatMapProps {
   counties?: AlabamaCountyData[];
   selectedCountyId?: string | null;
   onSelectCounty?: (county: AlabamaCountyData) => void;
-  assignedCountyId?: string;
-  isRegionalUnlocked?: boolean;
+  /**
+   * Counties the agency is licensed for. Anything outside this set is drawn
+   * dimmed and routes clicks to `onLockedCountyClick` instead of selection.
+   * Omit to leave every county unlocked — a map whose counties silently refuse
+   * to open is worse than a map with no gating at all.
+   */
+  unlockedCountyIds?: string[];
+  /**
+   * The active county-scope filter. Counties outside it stay drawn for
+   * geographic context but are inert, so narrowing the dashboard to one county
+   * narrows the map with it.
+   */
+  scopedCountyIds?: string[];
   onLockedCountyClick?: (county: AlabamaCountyData) => void;
 }
+
+/**
+ * What a county affords right now.
+ * - `active`   — in scope and licensed: hover, focus and select all work.
+ * - `locked`   — outside the agency's coverage: visible and clickable, but a
+ *                click asks about coverage rather than selecting.
+ * - `filtered` — removed by the search box, region filter or county scope:
+ *                drawn as context only, inert and hidden from assistive tech.
+ */
+type CountyAccess = 'active' | 'locked' | 'filtered';
 
 type ShadingMetric = 'foodAccessScore' | 'povertyRate' | 'nearestPantryMiles';
 type RegionFilter = 'all' | 'River Region' | 'Black Belt' | 'critical';
@@ -70,7 +91,10 @@ function getMetricColor(county: AlabamaCountyData, metric: ShadingMetric): strin
 }
 
 /** Sentence read out by assistive technology when a county receives focus. */
-function describeCounty(county: AlabamaCountyData): string {
+function describeCounty(county: AlabamaCountyData, access: CountyAccess): string {
+  if (access === 'locked') {
+    return `${county.name}. Outside your agency's county coverage. Select to review adding it.`;
+  }
   const pantries = county.activePantries === 1 ? '1 active pantry' : `${county.activePantries} active pantries`;
   return (
     `${county.name}. Food access score ${county.foodAccessScore} out of 100, ${county.status}. ` +
@@ -132,8 +156,8 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({
   counties,
   selectedCountyId,
   onSelectCounty,
-  assignedCountyId = "montgomery",
-  isRegionalUnlocked = false,
+  unlockedCountyIds,
+  scopedCountyIds,
   onLockedCountyClick,
 }) => {
   // Never render an empty map: an in-flight subscription should still show the
@@ -150,24 +174,65 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({
   const searchInputId = 'alabama-map-county-search';
   const regionSelectId = 'alabama-map-region-filter';
 
-  const matchingCounties = useMemo(() => {
+  // `undefined` means "no gate", which is what keeps the map usable for any
+  // caller that has not wired entitlements or scope yet.
+  const unlockedIds = useMemo(
+    () => (unlockedCountyIds ? new Set(unlockedCountyIds) : null),
+    [unlockedCountyIds],
+  );
+  const scopedIds = useMemo(
+    () => (scopedCountyIds ? new Set(scopedCountyIds) : null),
+    [scopedCountyIds],
+  );
+
+  const accessById = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    return alabamaCounties.filter((county) => {
+    const map = new Map<string, CountyAccess>();
+
+    for (const county of alabamaCounties) {
       const matchesSearch =
         term === '' ||
         county.name.toLowerCase().includes(term) ||
         county.abbrev.toLowerCase().includes(term) ||
         county.zipCodes.some((zip) => zip.includes(term));
-      if (!matchesSearch) return false;
 
-      if (regionFilter === 'River Region') return county.region === 'River Region';
-      if (regionFilter === 'Black Belt') return county.region === 'Black Belt' || county.region === 'River Region';
-      if (regionFilter === 'critical') return county.foodAccessScore < 25;
-      return true;
-    });
-  }, [alabamaCounties, searchTerm, regionFilter]);
+      const matchesRegion =
+        regionFilter === 'River Region'
+          ? county.region === 'River Region'
+          : regionFilter === 'Black Belt'
+            ? county.region === 'Black Belt' || county.region === 'River Region'
+            : regionFilter === 'critical'
+              ? county.foodAccessScore < 25
+              : true;
+
+      // Licensing is checked before the scope filter so an unlicensed county
+      // still offers the coverage prompt rather than vanishing into the
+      // background the moment the dashboard is scoped to one county.
+      if (unlockedIds && !unlockedIds.has(county.id)) {
+        map.set(county.id, matchesSearch && matchesRegion ? 'locked' : 'filtered');
+        continue;
+      }
+
+      const inScope = !scopedIds || scopedIds.has(county.id);
+      map.set(county.id, matchesSearch && matchesRegion && inScope ? 'active' : 'filtered');
+    }
+
+    return map;
+  }, [alabamaCounties, searchTerm, regionFilter, unlockedIds, scopedIds]);
+
+  /** Counties a pointer or the arrow keys can reach: selectable or upsellable. */
+  const matchingCounties = useMemo(
+    () => alabamaCounties.filter((county) => accessById.get(county.id) !== 'filtered'),
+    [alabamaCounties, accessById],
+  );
 
   const matchingIds = useMemo(() => new Set(matchingCounties.map((county) => county.id)), [matchingCounties]);
+
+  /** Counties whose figures are actually being reported on. */
+  const activeCounties = useMemo(
+    () => alabamaCounties.filter((county) => accessById.get(county.id) === 'active'),
+    [alabamaCounties, accessById],
+  );
 
   /**
    * The single county reachable by Tab. Arrow keys move it around the map, so
@@ -176,11 +241,15 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({
   const rovingCountyId =
     (selectedCountyId && matchingIds.has(selectedCountyId) ? selectedCountyId : null) ??
     (focusedCountyId && matchingIds.has(focusedCountyId) ? focusedCountyId : null) ??
+    // Prefer a county that is actually in scope: Tab landing on a locked
+    // county would offer the coverage upsell before the data the user came for.
+    activeCounties[0]?.id ??
     matchingCounties[0]?.id ??
     null;
 
   const activeCounty =
     alabamaCounties.find((county) => county.id === (hoveredCountyId ?? focusedCountyId)) ?? null;
+  const activeCountyAccess = activeCounty ? accessById.get(activeCounty.id) ?? 'filtered' : 'filtered';
 
 
   const focusCounty = useCallback((county: AlabamaCountyData) => {
@@ -219,10 +288,11 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({
 
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        onSelectCounty?.(county);
+        if (accessById.get(county.id) === 'locked') onLockedCountyClick?.(county);
+        else onSelectCounty?.(county);
       }
     },
-    [matchingCounties, focusCounty, onSelectCounty],
+    [matchingCounties, focusCounty, onSelectCounty, onLockedCountyClick, accessById],
   );
 
   // Zoom works by narrowing the viewBox rather than CSS-scaling the element, so
@@ -266,7 +336,8 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({
     };
   }, [activeCounty, viewBox]);
 
-  const criticalCount = matchingCounties.filter((county) => county.foodAccessScore < 25).length;
+  const criticalCount = activeCounties.filter((county) => county.foodAccessScore < 25).length;
+  const lockedCount = matchingCounties.length - activeCounties.length;
 
   return (
     <div className="space-y-4">
@@ -371,7 +442,8 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({
 
         {/* Result count, announced when filters change. */}
         <p aria-live="polite" className="sr-only">
-          {matchingCounties.length} of {alabamaCounties.length} counties shown, {criticalCount} in critical status.
+          {activeCounties.length} of {alabamaCounties.length} counties in scope, {criticalCount} in critical status
+          {lockedCount > 0 ? `, ${lockedCount} outside your coverage` : ''}.
         </p>
 
         <div className="relative w-full max-w-[440px]" style={{ aspectRatio: `${ALABAMA_VIEW_WIDTH} / ${ALABAMA_VIEW_HEIGHT}` }}>
@@ -403,9 +475,11 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({
               const geometry = alabamaCountyGeometry[county.fips];
               if (!geometry) return null;
 
-              const isMatch = matchingIds.has(county.id);
-              const isSelected = selectedCountyId === county.id;
-              const isActive = activeCounty?.id === county.id;
+              const access = accessById.get(county.id) ?? 'filtered';
+              const isMatch = access !== 'filtered';
+              const isLocked = access === 'locked';
+              const isSelected = selectedCountyId === county.id && !isLocked;
+              const isActive = activeCounty?.id === county.id && !isLocked;
               const isRoving = rovingCountyId === county.id;
               const fontSize = Math.max(7, Math.min(10, Math.sqrt(geometry.area) / 6));
 
@@ -418,28 +492,24 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({
                   }}
                   role="button"
                   tabIndex={isMatch && isRoving ? 0 : -1}
-                  aria-label={describeCounty(county)}
-                  aria-pressed={isSelected}
+                  aria-label={describeCounty(county, access)}
+                  aria-pressed={isLocked ? undefined : isSelected}
                   aria-hidden={!isMatch}
                   onClick={() => {
-                    const isLocked = !isRegionalUnlocked && county.id !== assignedCountyId;
-                    if (isLocked) {
-                      onLockedCountyClick?.(county);
-                    } else {
-                      onSelectCounty?.(county);
-                    }
+                    if (isLocked) onLockedCountyClick?.(county);
+                    else onSelectCounty?.(county);
                   }}
                   onKeyDown={(event) => handleKeyDown(event, county)}
                   onFocus={() => setFocusedCountyId(county.id)}
                   onBlur={() => setFocusedCountyId((current) => (current === county.id ? null : current))}
                   onMouseEnter={() => setHoveredCountyId(county.id)}
                   className="cursor-pointer focus:outline-none"
-                  opacity={isMatch ? 1 : 0.18}
+                  opacity={access === 'active' ? 1 : isLocked ? 0.3 : 0.14}
                   pointerEvents={isMatch ? 'auto' : 'none'}
                 >
                   <path
                     d={geometry.d}
-                    fill={getMetricColor(county, shadingMetric)}
+                    fill={isLocked ? '#64748b' : getMetricColor(county, shadingMetric)}
                     fillOpacity={isActive ? 1 : isSelected ? 0.95 : 0.8}
                     stroke={isActive || isSelected ? '#ffffff' : 'rgba(15,17,23,0.9)'}
                     strokeWidth={isActive || isSelected ? 2 : 0.6}
@@ -474,7 +544,7 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({
                     {county.abbrev.replace(/\.$/, '')}
                   </text>
 
-                  {county.foodAccessScore < 25 && (
+                  {county.foodAccessScore < 25 && access === 'active' && (
                     <circle
                       cx={geometry.labelX}
                       cy={geometry.labelY - fontSize}
@@ -495,6 +565,19 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({
               style={{ left: tooltipPosition.left, top: tooltipPosition.top, transform: tooltipPosition.transform }}
             >
               <div className="bg-[#1a1d2e]/97 border border-white/[0.18] rounded-2xl p-4 shadow-2xl backdrop-blur-xl w-64 text-left">
+                {activeCountyAccess === 'locked' ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-3.5 h-3.5 shrink-0 text-amber-300" aria-hidden="true" />
+                      <h4 className="text-[14px] font-bold text-white leading-tight">{activeCounty.name}</h4>
+                    </div>
+                    <p className="mt-2 text-[11px] text-slate-300">
+                      Outside your agency&rsquo;s county coverage. Select it to review adding{' '}
+                      {activeCounty.name.replace(/ County$/, '')} to your plan.
+                    </p>
+                  </>
+                ) : (
+                <>
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
                     <h4 className="text-[14px] font-bold text-white leading-tight">{activeCounty.name}</h4>
@@ -547,6 +630,8 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({
                   </span>
                   <span className="font-semibold text-white truncate">{activeCounty.topRequestedItem}</span>
                 </div>
+                </>
+                )}
               </div>
             </div>
           )}
@@ -561,6 +646,7 @@ export const AlabamaHeatMap: React.FC<AlabamaHeatMapProps> = ({
               { color: '#f59e0b', label: 'At risk (25–39)' },
               { color: '#3b82f6', label: 'Moderate (40–59)' },
               { color: '#10b981', label: 'Adequate (60+)' },
+              ...(lockedCount > 0 ? [{ color: '#64748b', label: 'Outside your coverage' }] : []),
             ].map((entry) => (
               <div key={entry.label} className="flex items-center gap-1.5">
                 <span

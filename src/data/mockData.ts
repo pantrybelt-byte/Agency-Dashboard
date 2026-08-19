@@ -4,15 +4,11 @@ import type {
   RegionSummary,
   FoodDesertZone,
   RequestedItem,
-  DailyInteractionData,
-  TimeSeriesDataPoint,
   CategoryBreakdown,
   ReportTemplate,
-  GeneratedReport,
   DemographicsData,
   ThresholdAlert,
 } from '../types';
-import { createSeededRandom } from '../utils/seededRandom';
 
 // ============================================
 // Agency Users with Scoped Permissions
@@ -21,6 +17,7 @@ import { createSeededRandom } from '../utils/seededRandom';
 export const mockAgencyUsers: AgencyUser[] = [
   {
     id: 'ag_01',
+    orgId: 'org_uwrr',
     name: 'Dr. Patricia Hawkins',
     email: 'p.hawkins@uwriverregion.org',
     organization: 'United Way River Region',
@@ -36,6 +33,7 @@ export const mockAgencyUsers: AgencyUser[] = [
   },
   {
     id: 'ag_02',
+    orgId: 'org_usda_fns',
     name: 'Marcus Coleman',
     email: 'm.coleman@usda.gov',
     organization: 'USDA Food & Nutrition Service',
@@ -51,6 +49,7 @@ export const mockAgencyUsers: AgencyUser[] = [
   },
   {
     id: 'ag_03',
+    orgId: 'org_cacaa',
     name: 'Teresa Nguyen',
     email: 't.nguyen@cacaa.org',
     organization: 'Community Action Committee',
@@ -485,78 +484,13 @@ export const mockRequestedItems: RequestedItem[] = [
   { id: 'ri_25', name: 'Bottled Water (24-pack)', category: 'Beverages', requestCount: 920, trend: 'steady', trendPercentage: 2.8, weeklyData: [130, 132, 128, 135, 130, 133, 132], lastRequested: '4 hrs ago' },
 ];
 
-// ============================================
-// Daily Interaction Data (30 days)
-// ============================================
-
-function generateDailyInteractions(): DailyInteractionData[] {
-  const random = createSeededRandom(20260811);
-  const data: DailyInteractionData[] = [];
-  const startDate = new Date('2026-07-12');
-
-  for (let i = 0; i < 30; i++) {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + i);
-    const dayOfWeek = date.getDay();
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-    const baseFactor = isWeekend ? 0.6 : 1.0;
-    const trendFactor = 1 + (i / 30) * 0.15;
-    const noise = 0.85 + random() * 0.3;
-
-    const checkIns = Math.round(180 * baseFactor * trendFactor * noise);
-    const itemScans = Math.round(320 * baseFactor * trendFactor * noise);
-    const notificationViews = Math.round(450 * baseFactor * trendFactor * (0.8 + random() * 0.4));
-    const searches = Math.round(95 * baseFactor * trendFactor * noise);
-    const directions = Math.round(65 * baseFactor * trendFactor * noise);
-
-    data.push({
-      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      checkIns,
-      itemScans,
-      notificationViews,
-      searches,
-      directions,
-      total: checkIns + itemScans + notificationViews + searches + directions,
-    });
-  }
-  return data;
-}
-
-export const mockDailyInteractions = generateDailyInteractions();
-
-// ============================================
-// Families Served Time Series with Period Comparison (30 days)
-// ============================================
-
-function generateFamiliesServedTimeSeries(): TimeSeriesDataPoint[] {
-  const random = createSeededRandom(48271);
-  const data: TimeSeriesDataPoint[] = [];
-  const startDate = new Date('2026-07-12');
-
-  for (let i = 0; i < 30; i++) {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + i);
-    const dayOfWeek = date.getDay();
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-    const base = isWeekend ? 320 : 480;
-    const trend = 1 + (i / 30) * 0.12;
-    const noise = 0.88 + random() * 0.24;
-
-    const currentVal = Math.round(base * trend * noise);
-    const prevVal = Math.round(base * (trend - 0.1) * (noise * 0.95));
-
-    data.push({
-      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: currentVal,
-      previousValue: prevVal,
-    });
-  }
-  return data;
-}
-
-export const mockFamiliesServedSeries = generateFamiliesServedTimeSeries();
+/*
+ * The fixed 30-day interaction and families-served series that used to live
+ * here have been replaced by `data/demoRollups.ts`, which generates county-day
+ * rollups on demand relative to today. Two consequences worth knowing:
+ * a demo opened next March shows next March, and the date picker reads a real
+ * window instead of slicing a fixed array.
+ */
 
 // ============================================
 // Threshold Alerts
@@ -565,6 +499,7 @@ export const mockFamiliesServedSeries = generateFamiliesServedTimeSeries();
 export const mockThresholdAlerts: ThresholdAlert[] = [
   {
     id: 'alt_01',
+    orgId: 'org_uwrr',
     metric: 'Food Access Score',
     countyOrPantry: 'Lowndes County',
     condition: 'less_than',
@@ -575,6 +510,7 @@ export const mockThresholdAlerts: ThresholdAlert[] = [
   },
   {
     id: 'alt_02',
+    orgId: 'org_uwrr',
     metric: 'Active Status',
     countyOrPantry: 'Millbrook Mercy Center',
     condition: 'status_change',
@@ -585,6 +521,7 @@ export const mockThresholdAlerts: ThresholdAlert[] = [
   },
   {
     id: 'alt_03',
+    orgId: 'org_uwrr',
     metric: 'Demand Spike',
     countyOrPantry: 'Infant Formula (Stage 1)',
     condition: 'greater_than',
@@ -671,10 +608,4 @@ export const mockReportTemplates: ReportTemplate[] = [
   },
 ];
 
-export const mockGeneratedReports: GeneratedReport[] = [
-  { id: 'gen_01', name: 'Monthly Impact Summary — July 2026', templateId: 'rpt_01', dateRange: 'Jul 1–31, 2026', generatedAt: 'Aug 1, 2026 at 9:00 AM', status: 'ready', fileSize: '2.4 MB' },
-  { id: 'gen_02', name: 'Food Desert Assessment — Q2 2026', templateId: 'rpt_02', dateRange: 'Apr 1–Jun 30, 2026', generatedAt: 'Jul 1, 2026 at 8:30 AM', status: 'ready', fileSize: '3.8 MB' },
-  { id: 'gen_03', name: 'Pantry Scorecard — July 2026', templateId: 'rpt_03', dateRange: 'Jul 1–31, 2026', generatedAt: 'Aug 1, 2026 at 9:15 AM', status: 'ready', fileSize: '1.9 MB' },
-  { id: 'gen_04', name: 'Item Demand Report — August W1', templateId: 'rpt_04', dateRange: 'Aug 1–7, 2026', generatedAt: 'Aug 5, 2026 at 10:00 AM', status: 'ready', fileSize: '1.2 MB' },
-  { id: 'gen_05', name: 'Grant Impact — Q2 2026 (United Way)', templateId: 'rpt_05', dateRange: 'Apr 1–Jun 30, 2026', generatedAt: 'Jul 1, 2026 at 11:00 AM', status: 'ready', fileSize: '4.1 MB' },
-];
+

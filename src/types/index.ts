@@ -21,6 +21,8 @@ export type ModuleId = 'sdoh' | 'chna' | 'csr' | 'disaster';
 
 export interface AgencyUser {
   id: string;
+  /** Stable agency identifier, mirrored into the `orgId` custom claim. */
+  orgId: string;
   name: string;
   email: string;
   organization: string;
@@ -160,6 +162,12 @@ export interface CategoryBreakdown {
 
 export interface ThresholdAlert {
   id: string;
+  /**
+   * Owning agency. Required by the security rules: without it a document
+   * cannot be matched to the agency permitted to read it, so a write that
+   * omits it is rejected rather than becoming visible to everyone.
+   */
+  orgId: string;
   metric: string;
   countyOrPantry: string;
   condition: 'less_than' | 'greater_than' | 'status_change';
@@ -174,6 +182,8 @@ export type ReportFormat = 'csv' | 'pdf';
 
 export interface ScheduledReport {
   id: string;
+  /** Owning agency. See the note on ThresholdAlert. */
+  orgId: string;
   templateId: string;
   templateName: string;
   frequency: ReportFrequency;

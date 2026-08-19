@@ -12,7 +12,8 @@
  * print route (`window.print()`, styled by the @media print block in
  * index.css) is the honest path to paper.
  */
-import type { PantryMetric, FoodDesertZone } from '../types';
+import type { PantryMetric } from '../types';
+import type { AlabamaCountyData } from '../data/alabamaCounties';
 import type { PresetId } from '../config/presets';
 
 export interface ExportBundle {
@@ -24,7 +25,15 @@ export interface ExportBundle {
 
 export interface ExportContext {
   pantries: PantryMetric[];
-  zones: FoodDesertZone[];
+  /**
+   * County census measures for the counties in scope.
+   *
+   * These come from the same `countyMetrics` rollup the choropleth reads, not
+   * from a second hand-maintained list. There used to be two overlapping
+   * datasets describing the same counties, and the exports read the one that
+   * was never filtered by the agency's coverage.
+   */
+  counties: AlabamaCountyData[];
   countyScope: string;
   periodLabel: string;
   agencyName: string;
@@ -33,6 +42,15 @@ export interface ExportContext {
 }
 
 const stamp = () => new Date().toISOString().slice(0, 10);
+
+/** "Lowndes County" as the pantry directory spells it: "Lowndes". */
+const plainCounty = (name: string): string => name.replace(/\s+County$/, '');
+
+/** Index the census rows once rather than scanning them per output row. */
+function countyLookup(counties: AlabamaCountyData[]): (name: string) => AlabamaCountyData | undefined {
+  const byName = new Map(counties.map((county) => [plainCounty(county.name), county]));
+  return (name) => byName.get(name);
+}
 
 function provenanceFor(ctx: ExportContext, purpose: string): string[] {
   const lines = [
@@ -57,18 +75,20 @@ function buildGrantExport(ctx: ExportContext): ExportBundle {
     byCounty.set(pantry.county, [...(byCounty.get(pantry.county) ?? []), pantry]);
   }
 
+  const censusFor = countyLookup(ctx.counties);
+
   const rows = [...byCounty.entries()].map(([county, list]) => {
-    const zone = ctx.zones.find((z) => z.county === county);
+    const census = censusFor(county);
     return {
       County: county,
       'Pantries Reporting': list.length,
       'Families Served': list.reduce((sum, p) => sum + p.familiesServed, 0),
       'Items Distributed': list.reduce((sum, p) => sum + p.totalItemsDistributed, 0),
-      'Food Access Score': zone?.foodAccessScore ?? '',
-      'Percent Below Poverty': zone?.percentBelowPoverty ?? '',
-      'Median Income': zone?.medianIncome ?? '',
-      'Nearest Pantry (mi)': zone?.nearestPantryMiles ?? '',
-      'Population': zone?.population ?? '',
+      'Food Access Score': census?.foodAccessScore ?? '',
+      'Percent Below Poverty': census?.povertyRate ?? '',
+      'Median Income': census?.medianIncome ?? '',
+      'Nearest Pantry (mi)': census?.nearestPantryMiles ?? '',
+      Population: census?.population ?? '',
     };
   });
 
@@ -82,16 +102,18 @@ function buildGrantExport(ctx: ExportContext): ExportBundle {
 // ─── SDOH Health & Medicaid ────────────────────────────────────────────────
 // A payer audit is per ZIP, not per pantry — the unit of a member roster.
 function buildSdohExport(ctx: ExportContext): ExportBundle {
-  const rows = ctx.zones.flatMap((zone) =>
-    zone.zipCodes.map((zip) => ({
+  const rows = ctx.counties.flatMap((county) =>
+    county.zipCodes.map((zip) => ({
       'ZIP Code': zip,
-      County: zone.county,
-      'Food Access Score': zone.foodAccessScore,
-      'Vulnerability Tier': zone.status,
-      'Percent Below Poverty': zone.percentBelowPoverty,
-      'Nearest Food Resource (mi)': zone.nearestPantryMiles,
-      'Grocery Outlets': zone.groceryStoresCount,
-      'Referral Endpoints Available': ctx.pantries.filter((p) => p.county === zone.county).length,
+      County: plainCounty(county.name),
+      'Food Access Score': county.foodAccessScore,
+      'Vulnerability Tier': county.status,
+      'Percent Below Poverty': county.povertyRate,
+      'Nearest Food Resource (mi)': county.nearestPantryMiles,
+      'Population Assessed': county.population,
+      'Referral Endpoints Available': ctx.pantries.filter(
+        (p) => p.county === plainCounty(county.name),
+      ).length,
     })),
   );
 
@@ -105,19 +127,21 @@ function buildSdohExport(ctx: ExportContext): ExportBundle {
 // ─── IRS CHNA Hospital Compliance ──────────────────────────────────────────
 // Form 501(r) wants documented community need and the response to it.
 function buildChnaExport(ctx: ExportContext): ExportBundle {
-  const rows = ctx.zones.map((zone) => ({
-    'Community (County)': zone.county,
-    'Population Assessed': zone.population,
-    'Identified Need': zone.status,
-    'Food Access Score': zone.foodAccessScore,
-    'Percent Below Poverty': zone.percentBelowPoverty,
-    'Median Household Income': zone.medianIncome,
-    'Documented Response Sites': ctx.pantries.filter((p) => p.county === zone.county).length,
-    'Families Reached': ctx.pantries
-      .filter((p) => p.county === zone.county)
-      .reduce((sum, p) => sum + p.familiesServed, 0),
-    'Distance To Nearest Resource (mi)': zone.nearestPantryMiles,
-  }));
+  const rows = ctx.counties.map((county) => {
+    const name = plainCounty(county.name);
+    const sites = ctx.pantries.filter((p) => p.county === name);
+    return {
+      'Community (County)': name,
+      'Population Assessed': county.population,
+      'Identified Need': county.status,
+      'Food Access Score': county.foodAccessScore,
+      'Percent Below Poverty': county.povertyRate,
+      'Median Household Income': county.medianIncome,
+      'Documented Response Sites': sites.length,
+      'Families Reached': sites.reduce((sum, p) => sum + p.familiesServed, 0),
+      'Distance To Nearest Resource (mi)': county.nearestPantryMiles,
+    };
+  });
 
   return {
     filename: `AccessBelt_IRS_501r_CHNA_${ctx.countyScope}_${stamp()}`,

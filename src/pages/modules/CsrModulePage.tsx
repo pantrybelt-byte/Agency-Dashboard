@@ -12,20 +12,24 @@ import { Users, MapPinned, Building2, ImagePlus } from 'lucide-react';
 import { ChartCard } from '../../components/ui/ChartCard';
 import { MetricCard } from '../../components/ui/MetricCard';
 import { ModuleShell, SampleNotice } from './ModuleShell';
-import { mockFoodDesertZones, mockPantryMetrics } from '../../data/mockData';
+import { useModuleData } from './useModuleData';
 import { buildModuleExport } from '../../utils/moduleExports';
-import { exportToCSV } from '../../utils/csvExport';
+import { exportBundleToCSV } from '../../utils/csvExport';
 import { useAuth } from '../../hooks/useAuth';
 
 const SPONSORS = ['Alabama Power Foundation', 'Regions Bank Foundation', 'Publix Charities'];
 
+/** Annual sponsorship, against which reach is costed. Modelled, and marked so. */
+const SPONSORSHIP_USD = 42_000;
+
 export const CsrModulePage: React.FC = () => {
   const { user } = useAuth();
+  const { pantries, totals, scopeLabel, periodLabel, status, error, exportContext } = useModuleData();
   const [sponsor, setSponsor] = useState(SPONSORS[0]);
 
   const byCounty = useMemo(() => {
     const map = new Map<string, { county: string; families: number; sites: number; growth: number }>();
-    for (const pantry of mockPantryMetrics) {
+    for (const pantry of pantries) {
       const current = map.get(pantry.county) ?? {
         county: pantry.county,
         families: 0,
@@ -40,25 +44,28 @@ export const CsrModulePage: React.FC = () => {
     return [...map.values()]
       .map((entry) => ({ ...entry, growth: Number((entry.growth / entry.sites).toFixed(1)) }))
       .sort((a, b) => b.families - a.families);
-  }, []);
+  }, [pantries]);
 
   const totalFamilies = byCounty.reduce((sum, c) => sum + c.families, 0);
-  const costPerFamily = 42_000 / Math.max(1, totalFamilies);
+  const costPerFamily = SPONSORSHIP_USD / Math.max(1, totalFamilies);
 
   const handleExport = () => {
-    const bundle = buildModuleExport('csr', {
-      pantries: mockPantryMetrics,
-      zones: mockFoodDesertZones,
-      countyScope: 'sponsored',
-      periodLabel: 'current year',
-      agencyName: sponsor,
-      containsModelledFigures: true,
-    });
-    exportToCSV(bundle.filename, bundle.rows);
+    const bundle = buildModuleExport(
+      'csr',
+      exportContext({ agencyName: sponsor, containsModelledFigures: true }),
+    );
+    exportBundleToCSV(bundle);
   };
 
   return (
-    <ModuleShell moduleId="csr" onExport={handleExport}>
+    <ModuleShell
+      moduleId="csr"
+      onExport={handleExport}
+      scopeLabel={scopeLabel}
+      periodLabel={periodLabel}
+      status={status}
+      error={error}
+    >
       <div className="space-y-5">
         {/* Co-branded header — the artifact the sponsor is actually buying */}
         <section className="card overflow-hidden">
@@ -135,7 +142,9 @@ export const CsrModulePage: React.FC = () => {
           />
           <MetricCard
             label="Distribution Sites"
-            value={mockPantryMetrics.length}
+            value={pantries.length}
+            trend={totals.familiesTrend}
+            trendLabel="families vs previous period"
             icon={<Building2 className="h-5 w-5 text-violet-400" aria-hidden="true" />}
             glowClass="metric-glow-indigo"
           />

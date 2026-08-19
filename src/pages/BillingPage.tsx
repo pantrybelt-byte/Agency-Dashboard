@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { CreditCard, Download, Zap, ArrowRight, ExternalLink, FileText, Landmark, Building2, Mail, Webhook } from 'lucide-react';
+import { CreditCard, Zap, ArrowRight, ExternalLink, FileText, Landmark, Building2, Mail, Webhook } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ChartCard } from '../components/ui/ChartCard';
+import { useAuth } from '../hooks/useAuth';
+import { readEnv } from '../services/firebaseStatus';
 import { EntitlementBadge } from '../components/ui/StatusBadge';
 import { UpgradeModal } from '../components/ui/UpgradeModal';
 import {
@@ -25,19 +27,42 @@ const mockInvoices = [
   { id: 'INV-2026-006', date: 'Jun 1, 2026', amount: '$8,500.00', status: 'Paid', plan: 'Corporate CSR module — annual contract', pdf: 'invoice_jun_2026.pdf' },
 ];
 
+const ACCOUNTS_EMAIL = 'accounts@accessbelt.org';
+
+/**
+ * Billing is not wired to a payment processor yet.
+ *
+ * Rather than showing buttons that report success for work nobody did — "W-9
+ * packet sent", "Receipt is downloading" — the procurement actions compose a
+ * real email to the accounts team, which is how a Net-30 purchase order is
+ * actually raised, and the card paths say plainly that they are not connected.
+ */
+function mailto(subject: string, body: string): string {
+  return `mailto:${ACCOUNTS_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
 export const BillingPage: React.FC<BillingPageProps> = () => {
   const { isUnlocked } = usePreset();
+  const { user } = useAuth();
   const [upgradeTarget, setUpgradeTarget] = useState<ViewPreset | null>(null);
-  const [portalBusy, setPortalBusy] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const stripeKey = readEnv('VITE_STRIPE_PUBLISHABLE_KEY');
+  const stripePortalUrl = readEnv('VITE_STRIPE_PORTAL_URL');
+  const stripeReady = Boolean(stripeKey && stripePortalUrl);
+
+  const agency = user?.organization ?? 'our agency';
+  const signature = user ? `\n\n${user.name}\n${user.organization}\n${user.email}` : '';
+
   const handleOpenStripePortal = () => {
-    setPortalBusy(true);
-    setTimeout(() => {
-      setPortalBusy(false);
-      setToastMessage('Redirecting to Stripe Customer Portal (manage cards, invoices, tax IDs)...');
-      setTimeout(() => setToastMessage(null), 4000);
-    }, 1000);
+    if (stripePortalUrl) {
+      window.open(stripePortalUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    setToastMessage(
+      'Card billing is not connected yet. Set VITE_STRIPE_PUBLISHABLE_KEY and VITE_STRIPE_PORTAL_URL to enable it.',
+    );
+    setTimeout(() => setToastMessage(null), 5000);
   };
 
   return (
@@ -74,7 +99,7 @@ export const BillingPage: React.FC<BillingPageProps> = () => {
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.1] text-white text-[12px] font-bold hover:bg-white/[0.1] transition-all cursor-pointer shadow-sm shrink-0 self-end md:self-auto"
         >
           <ExternalLink className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
-          {portalBusy ? 'Opening portal…' : 'Manage Stripe Portal'}
+          {stripeReady ? 'Manage Stripe portal' : 'Card billing not connected'}
         </button>
       </div>
 
@@ -127,22 +152,26 @@ export const BillingPage: React.FC<BillingPageProps> = () => {
           </div>
 
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
-            <button
-              type="button"
-              onClick={() => setToastMessage('Purchase order request sent. Our team will email your invoice and W-9 within one business day.')}
+            <a
+              href={mailto(
+                `Purchase order request — ${agency}`,
+                `Please issue a Net-30 invoice for the AccessBelt base platform and send your W-9.${signature}`,
+              )}
               className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-[12px] font-bold text-[#04140d] transition-colors hover:bg-emerald-400 cursor-pointer"
             >
               <FileText className="h-4 w-4" aria-hidden="true" />
               Request PO invoice
-            </button>
-            <button
-              type="button"
-              onClick={() => setToastMessage('W-9 and vendor registration packet sent to your billing contact.')}
+            </a>
+            <a
+              href={mailto(
+                `W-9 and vendor packet request — ${agency}`,
+                `Please send your W-9 and vendor registration packet for procurement.${signature}`,
+              )}
               className="flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-[12px] font-semibold text-slate-200 transition-colors hover:bg-white/[0.08] hover:text-white cursor-pointer"
             >
-              <Download className="h-4 w-4" aria-hidden="true" />
-              Download W-9
-            </button>
+              <Mail className="h-4 w-4" aria-hidden="true" />
+              Request W-9
+            </a>
             <a
               href="mailto:accounts@accessbelt.org"
               className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[12px] font-semibold text-slate-400 transition-colors hover:text-white"
@@ -183,10 +212,15 @@ export const BillingPage: React.FC<BillingPageProps> = () => {
             <span className="font-mono text-xl font-bold text-emerald-300">+$150 / mo <span className="text-[11px] font-normal text-slate-400">per extra county</span></span>
             <button
               type="button"
-              onClick={() => setToastMessage("Extra County Add-On Request Received. Our account team will issue your updated invoice.")}
-              className="rounded-xl border border-emerald-500/30 bg-emerald-500/20 px-3.5 py-2 text-[12px] font-bold text-emerald-300 hover:bg-emerald-500/30 transition-colors"
+              onClick={() => {
+                window.location.href = mailto(
+                  `Extra county coverage request — ${agency}`,
+                  `We would like to add county coverage to our AccessBelt subscription at $150/month per county.${signature}`,
+                );
+              }}
+              className="rounded-xl border border-emerald-500/30 bg-emerald-500/20 px-3.5 py-2 text-[12px] font-bold text-emerald-300 hover:bg-emerald-500/30 transition-colors cursor-pointer"
             >
-              + Add Extra County ($150/mo)
+              + Request extra county ($150/mo)
             </button>
           </div>
         </div>
@@ -348,35 +382,67 @@ export const BillingPage: React.FC<BillingPageProps> = () => {
         {/* Developer Stripe Integration Readiness Card */}
         <ChartCard title="Stripe API Configuration" subtitle="Webhook & keys status for developer handoff">
           <div className="space-y-3.5">
-            <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-between">
+            {/* Read from the environment rather than typed in. This card used
+                to display a plausible-looking pk_live_ key and a READY webhook
+                for an integration that does not exist. */}
+            <div
+              className={`p-3.5 rounded-xl border flex items-center justify-between ${
+                stripeReady
+                  ? 'bg-emerald-500/10 border-emerald-500/20'
+                  : 'bg-amber-500/[0.06] border-amber-500/20'
+              }`}
+            >
               <div className="flex items-center gap-2.5">
-                <Webhook className="w-4 h-4 text-indigo-400 shrink-0" aria-hidden="true" />
+                <Webhook
+                  className={`w-4 h-4 shrink-0 ${stripeReady ? 'text-emerald-400' : 'text-amber-400'}`}
+                  aria-hidden="true"
+                />
                 <div>
-                  <p className="text-[13px] font-bold text-white">Stripe Webhook Endpoint</p>
-                  <p className="text-[11px] text-slate-300">Listening for customer.subscription.updated</p>
+                  <p className="text-[13px] font-bold text-white">Card billing integration</p>
+                  <p className="text-[11px] text-slate-300">
+                    {stripeReady
+                      ? 'Publishable key and portal URL are configured.'
+                      : 'Not connected. No card payment can be taken yet.'}
+                  </p>
                 </div>
               </div>
-              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
-                READY
+              <span
+                className={`text-[10px] font-mono px-2 py-0.5 rounded-md ${
+                  stripeReady ? 'text-emerald-400 bg-emerald-500/10' : 'text-amber-300 bg-amber-500/10'
+                }`}
+              >
+                {stripeReady ? 'CONFIGURED' : 'NOT SET'}
               </span>
             </div>
 
             <div className="space-y-2 font-mono text-[11px]">
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#0f1117] border border-white/[0.06]">
-                <span className="text-slate-400">VITE_STRIPE_PUBLISHABLE_KEY:</span>
-                <span className="text-emerald-400">pk_live_51P...90X</span>
-              </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#0f1117] border border-white/[0.06]">
-                <span className="text-slate-400">STRIPE_WEBHOOK_SECRET:</span>
-                <span className="text-indigo-400">whsec_89f...21a</span>
-              </div>
+              {[
+                { key: 'VITE_STRIPE_PUBLISHABLE_KEY', value: stripeKey },
+                { key: 'VITE_STRIPE_PORTAL_URL', value: stripePortalUrl },
+              ].map((entry) => (
+                <div
+                  key={entry.key}
+                  className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-[#0f1117] border border-white/[0.06]"
+                >
+                  <span className="text-slate-400">{entry.key}</span>
+                  <span className={entry.value ? 'text-emerald-400' : 'text-amber-300'}>
+                    {entry.value ? `${entry.value.slice(0, 8)}…` : 'not set'}
+                  </span>
+                </div>
+              ))}
+              <p className="font-sans text-[11px] text-slate-400">
+                The webhook secret is a server-side value and is never present in this bundle.
+              </p>
             </div>
           </div>
         </ChartCard>
       </div>
 
       {/* Invoice History */}
-      <ChartCard title="Billing & Invoice History" subtitle="Download PDF receipts for grant auditing">
+      <ChartCard
+        title="Billing &amp; Invoice History"
+        subtitle="Example contract history — receipts are issued by the accounts team until card billing is connected"
+      >
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -403,11 +469,16 @@ export const BillingPage: React.FC<BillingPageProps> = () => {
                   </td>
                   <td className="py-3 px-3 text-right">
                     <button
-                      onClick={() => setToastMessage(`Receipt ${inv.id} is downloading.`)}
+                      onClick={() => {
+                        window.location.href = mailto(
+                          `Receipt request ${inv.id} — ${agency}`,
+                          `Please send the PDF receipt for invoice ${inv.id} (${inv.date}, ${inv.amount}).${signature}`,
+                        );
+                      }}
                       className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-                      title="Download PDF Invoice"
+                      aria-label={`Request the PDF receipt for invoice ${inv.id} by email`}
                     >
-                      <Download className="w-4 h-4" />
+                      <Mail className="w-4 h-4" aria-hidden="true" />
                     </button>
                   </td>
                 </tr>
