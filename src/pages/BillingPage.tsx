@@ -161,6 +161,37 @@ export const BillingPage: React.FC<BillingPageProps> = () => {
         </p>
       </section>
 
+      
+      {/* Primary County & Extra County Add-On Selector */}
+      <section aria-labelledby="county-addon-heading" className="card p-5 border border-emerald-500/20 bg-emerald-500/[0.02]">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                Coverage Tier
+              </span>
+              <span className="text-[11px] font-semibold text-slate-400">Primary: Montgomery County (Demo Default)</span>
+            </div>
+            <h2 id="county-addon-heading" className="mt-2 text-base font-bold tracking-tight text-white">
+              Expand Regional County Coverage
+            </h2>
+            <p className="mt-0.5 text-[12px] text-slate-300">
+              Base Subscription ($400/mo) includes 1 primary assigned county. Add individual adjacent counties for <span className="font-mono text-emerald-400 font-bold">+$150/mo per extra county</span>, or unlock full statewide coverage.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 shrink-0 sm:items-end">
+            <span className="font-mono text-xl font-bold text-emerald-300">+$150 / mo <span className="text-[11px] font-normal text-slate-400">per extra county</span></span>
+            <button
+              type="button"
+              onClick={() => setToastMessage("Extra County Add-On Request Received. Our account team will issue your updated invoice.")}
+              className="rounded-xl border border-emerald-500/30 bg-emerald-500/20 px-3.5 py-2 text-[12px] font-bold text-emerald-300 hover:bg-emerald-500/30 transition-colors"
+            >
+              + Add Extra County ($150/mo)
+            </button>
+          </div>
+        </div>
+      </section>
+
       {/* Base platform */}
       <section aria-labelledby="base-plan-heading" className="card p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

@@ -54,6 +54,15 @@ export const REGIONAL_PRO_PLATFORM = {
 };
 
 export const BASE_PLATFORM = {
+  name: "AccessBelt Base Platform",
+  includes: "1 primary assigned county of your choice (Montgomery default for demo)",
+  monthlyPrice: 400,
+  annualPrice: 4_000,
+  extraCountyPriceMonthly: 150,
+  extraCountyPriceAnnual: 1_500,
+} as const;
+
+export const PRESETS_PLATFORM_V2 = {
   name: 'AccessBelt Base Platform',
   includes: 'Grant & Community Impact view, all counties assigned to your agency',
   monthlyPrice: 400,
