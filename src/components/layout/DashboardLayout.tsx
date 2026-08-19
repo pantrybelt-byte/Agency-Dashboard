@@ -75,7 +75,7 @@ export const DashboardLayout = () => {
           onToggleSidebar={() => setMobileSidebarOpen(true)}
         />
 
-        <main id="main-content" tabIndex={-1} className="flex-1 p-5 sm:p-8 max-w-7xl w-full mx-auto">
+        <main id="main-content" tabIndex={-1} className="flex-1 p-5 sm:p-8 max-w-[1750px] w-full mx-auto">
           {/* Paper-only masthead. The screen header is hidden when printing,
               so without this a printed report carries no provenance. */}
           <div className="print-header mb-6 pb-4 border-b border-slate-300">
@@ -95,7 +95,7 @@ export const DashboardLayout = () => {
         </main>
 
         <footer className="border-t border-white/[0.04] py-4 px-8 no-print">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="max-w-[1750px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
             <p className="text-[11px] text-slate-400">
               © 2026 AccessBelt Analytics · Demonstration data — live Firebase integration pending
             </p>

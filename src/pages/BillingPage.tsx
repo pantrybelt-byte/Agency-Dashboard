@@ -41,7 +41,7 @@ export const BillingPage: React.FC<BillingPageProps> = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-6 w-full mx-auto">
       {/* Toast */}
       {toastMessage && (
         <div className="card-glass fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 animate-fade-in-up">

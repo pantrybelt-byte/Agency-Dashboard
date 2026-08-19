@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Bell, Menu, ChevronDown, User, Settings, LogOut, RefreshCw, Share2, Check } from 'lucide-react';
 import { PresetSwitcher } from '../ui/PresetSwitcher';
+import { PreviewModeSwitcher } from '../ui/PreviewModeSwitcher';
 import { UpgradeModal } from '../ui/UpgradeModal';
 import { usePreset } from '../../hooks/usePreset';
 import { useNavigate } from 'react-router-dom';
@@ -86,6 +87,8 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, pageSubtitle, onToggl
                   {isRefreshing ? 'Refreshing' : ''}
                 </span>
               </button>
+
+              <PreviewModeSwitcher className="hidden sm:block" />
             </div>
             {pageSubtitle && <p className="text-[12px] text-slate-300 mt-0.5 truncate">{pageSubtitle}</p>}
             {countyScope !== ALL_COUNTIES && (

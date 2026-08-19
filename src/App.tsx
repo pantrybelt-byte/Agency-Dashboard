@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { AuthProvider } from './context/AuthProvider';
 import { DashboardFilterProvider } from './context/DashboardFilterProvider';
 import { PresetProvider } from './context/PresetProvider';
+import { PreviewProvider } from './context/PreviewProvider';
 import { RequireAuth } from './components/routing/RequireAuth';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { LoginPage } from './pages/LoginPage';
@@ -72,11 +73,13 @@ function LoginRoute() {
 function ProtectedShell() {
   return (
     <RequireAuth>
-      <PresetProvider>
-        <DashboardFilterProvider>
-          <DashboardLayout />
-        </DashboardFilterProvider>
-      </PresetProvider>
+      <PreviewProvider>
+        <PresetProvider>
+          <DashboardFilterProvider>
+            <DashboardLayout />
+          </DashboardFilterProvider>
+        </PresetProvider>
+      </PreviewProvider>
     </RequireAuth>
   );
 }

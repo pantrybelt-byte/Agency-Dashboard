@@ -28,9 +28,11 @@ import {
   type ViewPreset,
 } from '../config/presets';
 import { useAuth } from '../hooks/useAuth';
+import { usePreview } from '../hooks/usePreview';
 
 export const PresetProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const { available: previewAvailable, effectiveEntitlements } = usePreview();
   const [searchParams, setSearchParams] = useSearchParams();
   const [pendingUpgrade, setPendingUpgrade] = useState<ViewPreset | null>(null);
 
@@ -38,10 +40,16 @@ export const PresetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const presetId: PresetId =
     requested && VIEW_PRESET_IDS.includes(requested) ? requested : DEFAULT_PRESET_ID;
 
-  const entitlements = user?.entitlements;
+  // While demo preview is available it decides entitlements — either every
+  // module (review mode) or the mix a chosen agency actually owns. With live
+  // data on, the signed-in account's real entitlements are the only source.
+  const entitlements = previewAvailable ? effectiveEntitlements : user?.entitlements;
 
   const isUnlocked = useCallback(
-    (id: PresetId) => isPresetUnlocked(getPreset(id), entitlements),
+    (id: PresetId) => {
+      if (entitlements === 'all') return true;
+      return isPresetUnlocked(getPreset(id), entitlements);
+    },
     [entitlements],
   );
 

@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '../context/AuthProvider';
 import { DashboardFilterProvider } from '../context/DashboardFilterProvider';
 import { PresetProvider } from '../context/PresetProvider';
+import { PreviewProvider } from '../context/PreviewProvider';
 
 const FIXED_NOW = new Date('2026-08-11T00:00:00.000Z');
 
@@ -20,9 +21,11 @@ export function renderPage(ui: React.ReactElement, initialEntry = '/') {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AuthProvider>
-        <PresetProvider>
-          <DashboardFilterProvider now={FIXED_NOW}>{ui}</DashboardFilterProvider>
-        </PresetProvider>
+        <PreviewProvider>
+          <PresetProvider>
+            <DashboardFilterProvider now={FIXED_NOW}>{ui}</DashboardFilterProvider>
+          </PresetProvider>
+        </PreviewProvider>
       </AuthProvider>
     </MemoryRouter>,
   );
